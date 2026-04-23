@@ -1,0 +1,282 @@
+{
+  "name": "git-commander-cockpit",
+  "displayName": "Git Commander Cockpit",
+  "description": "Complex Git, One Click Away",
+  "icon": "resources/icons/marketplace-icon.png",
+  "version": "0.1.0",
+  "publisher": "tryToDEv",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "scm",
+    "commander",
+    "stash",
+    "rebase",
+    "commit",
+    "branch",
+    "push",
+    "pull",
+    "fetch"
+  ],
+  "activationEvents": [
+    "workspaceContains:.git",
+    "onView:gitCommanderWorkingTree",
+    "onCommand:gitCommander.refresh"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "gitCommander.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.stage",
+        "title": "Stage",
+        "icon": "$(plus)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.stageAll",
+        "title": "Stage All",
+        "icon": "$(diff-added)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.unstage",
+        "title": "Unstage",
+        "icon": "$(minus)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.unstageAll",
+        "title": "Unstage All",
+        "icon": "$(diff-removed)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.discard",
+        "title": "Discard Changes",
+        "icon": "$(discard)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.openFile",
+        "title": "Open File",
+        "icon": "$(go-to-file)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.openDiff",
+        "title": "Open Changes",
+        "icon": "$(diff)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.switchBranch",
+        "title": "Switch Branch",
+        "icon": "$(git-branch)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.createBranch",
+        "title": "Create Branch",
+        "icon": "$(repo-create)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.fetch",
+        "title": "Fetch",
+        "icon": "$(cloud-download)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.pull",
+        "title": "Pull",
+        "icon": "$(arrow-down)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.push",
+        "title": "Push",
+        "icon": "$(arrow-up)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.stashSave",
+        "title": "Stash Changes",
+        "icon": "$(archive)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.revertLastCommit",
+        "title": "Revert Last Commit",
+        "icon": "$(history)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.revertCommit",
+        "title": "Search And Revert Commit",
+        "icon": "$(history)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.revertMultipleCommits",
+        "title": "Revert Multiple Commits",
+        "icon": "$(history)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.resetCommit",
+        "title": "Reset Commit",
+        "icon": "$(debug-restart)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.commit",
+        "title": "Commit",
+        "icon": "$(check)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.commitAmend",
+        "title": "Amend Last Commit",
+        "icon": "$(edit)",
+        "category": "Git Commander"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitCommander-explorer",
+          "title": "Git Commander",
+          "icon": "resources/icons/marketplace-icon.png"
+        }
+      ]
+    },
+    "views": {
+      "gitCommander-explorer": [
+        {
+          "id": "gitCommanderWorkingTree",
+          "name": "Working Tree",
+          "contextualTitle": "Git Commander"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "gitCommanderWorkingTree",
+        "contents": "No Git repository detected in this workspace.\n\nOpen a folder containing a Git repository to get started.\n[Open Folder](command:vscode.openFolder)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "gitCommander.refresh",
+          "when": "view == gitCommanderWorkingTree",
+          "group": "navigation"
+        },
+        {
+          "command": "gitCommander.switchBranch",
+          "when": "view == gitCommanderWorkingTree",
+          "group": "navigation"
+        },
+        {
+          "command": "gitCommander.fetch",
+          "when": "view == gitCommanderWorkingTree",
+          "group": "navigation"
+        },
+        {
+          "command": "gitCommander.revertCommit",
+          "when": "view == gitCommanderWorkingTree",
+          "group": "navigation"
+        },
+        {
+          "command": "gitCommander.commit",
+          "when": "view == gitCommanderWorkingTree",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gitCommander.stage",
+          "when": "view == gitCommanderWorkingTree && viewItem == modified",
+          "group": "inline"
+        },
+        {
+          "command": "gitCommander.stage",
+          "when": "view == gitCommanderWorkingTree && viewItem == untracked",
+          "group": "inline"
+        },
+        {
+          "command": "gitCommander.unstage",
+          "when": "view == gitCommanderWorkingTree && viewItem == staged",
+          "group": "inline"
+        },
+        {
+          "command": "gitCommander.discard",
+          "when": "view == gitCommanderWorkingTree && viewItem == modified",
+          "group": "inline"
+        },
+        {
+          "command": "gitCommander.openFile",
+          "when": "view == gitCommanderWorkingTree",
+          "group": "inline@10"
+        },
+        {
+          "command": "gitCommander.openDiff",
+          "when": "view == gitCommanderWorkingTree && viewItem =~ /^file:/",
+          "group": "inline@9"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Git Commander",
+      "properties": {
+        "gitCommander.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically refresh the sidebar when Git state changes"
+        },
+        "gitCommander.confirmDiscard": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show confirmation before discarding changes"
+        },
+        "gitCommander.confirmHardReset": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show confirmation before hard reset"
+        },
+        "gitCommander.showActionSection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show branch and sync actions inside the cockpit view"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "test": "npm run compile && node --test out/test/*.test.js",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.0"
+  }
+}
