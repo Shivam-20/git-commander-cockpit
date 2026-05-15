@@ -74,13 +74,24 @@ export async function pushCommand(): Promise<void> {
 }
 
 export async function stashSaveCommand(): Promise<void> {
+    const isClean = await isWorkingTreeClean();
+    if (isClean) {
+        vscode.window.showInformationMessage('Nothing to stash — working tree is already clean.');
+        return;
+    }
+
     const message = await vscode.window.showInputBox({
         prompt: 'Optional stash message',
         placeHolder: 'WIP: describe your changes'
     });
 
+    if (message === undefined) {
+        // User cancelled
+        return;
+    }
+
     const args = ['stash', 'push'];
-    if (message?.trim()) {
+    if (message.trim()) {
         args.push('-m', message.trim());
     }
 
@@ -104,6 +115,7 @@ async function confirmRevertPreconditions(title: string): Promise<boolean> {
 async function pickRecentCommits(): Promise<Commit[] | undefined> {
     const recentCommits = await getRecentCommits(100);
     if (recentCommits.length === 0) {
+        vscode.window.showWarningMessage('No recent local commits are available.');
         return undefined;
     }
 
@@ -192,7 +204,7 @@ export async function revertLastCommitCommand(): Promise<void> {
 export async function revertRecentCommitCommand(): Promise<void> {
     const selection = await pickCommitToRevert('Select commit to revert');
     if (!selection) {
-        vscode.window.showWarningMessage('No recent local commits are available to revert.');
+        // User cancelled or no commits — warning already shown by pickRecentCommits if needed
         return;
     }
 
@@ -209,7 +221,7 @@ export async function revertRecentCommitCommand(): Promise<void> {
 export async function revertMultipleCommitsCommand(): Promise<void> {
     const selection = await pickCommitsToRevert('Select commits to revert');
     if (!selection) {
-        vscode.window.showWarningMessage('No recent local commits are available to revert.');
+        // User cancelled or no commits — warning already shown if needed
         return;
     }
 
@@ -226,7 +238,7 @@ export async function revertMultipleCommitsCommand(): Promise<void> {
 export async function resetCommitCommand(): Promise<void> {
     const selection = await pickCommitToRevert('Select commit to reset to');
     if (!selection) {
-        vscode.window.showWarningMessage('No recent commits are available for reset.');
+        // User cancelled or no commits — warning already shown if needed
         return;
     }
 

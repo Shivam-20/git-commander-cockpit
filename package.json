@@ -26,7 +26,7 @@
   ],
   "activationEvents": [
     "workspaceContains:.git",
-    "onView:gitCommanderWorkingTree",
+    "onView:gitCommanderCockpit",
     "onCommand:gitCommander.refresh"
   ],
   "main": "./out/extension.js",
@@ -165,78 +165,68 @@
     "views": {
       "gitCommander-explorer": [
         {
-          "id": "gitCommanderWorkingTree",
-          "name": "Working Tree",
+          "type": "webview",
+          "id": "gitCommanderCockpit",
+          "name": "Git Commander",
           "contextualTitle": "Git Commander"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "gitCommanderWorkingTree",
-        "contents": "No Git repository detected in this workspace.\n\nOpen a folder containing a Git repository to get started.\n[Open Folder](command:vscode.openFolder)"
-      }
-    ],
+    "viewsWelcome": [],
     "menus": {
       "view/title": [
         {
           "command": "gitCommander.refresh",
-          "when": "view == gitCommanderWorkingTree",
-          "group": "navigation"
+          "when": "view == gitCommanderCockpit",
+          "group": "navigation@1"
         },
         {
           "command": "gitCommander.switchBranch",
-          "when": "view == gitCommanderWorkingTree",
-          "group": "navigation"
+          "when": "view == gitCommanderCockpit",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitCommander.createBranch",
+          "when": "view == gitCommanderCockpit",
+          "group": "navigation@3"
         },
         {
           "command": "gitCommander.fetch",
-          "when": "view == gitCommanderWorkingTree",
-          "group": "navigation"
+          "when": "view == gitCommanderCockpit",
+          "group": "navigation@4"
         },
         {
-          "command": "gitCommander.revertCommit",
-          "when": "view == gitCommanderWorkingTree",
-          "group": "navigation"
+          "command": "gitCommander.pull",
+          "when": "view == gitCommanderCockpit",
+          "group": "navigation@5"
+        },
+        {
+          "command": "gitCommander.push",
+          "when": "view == gitCommanderCockpit",
+          "group": "navigation@6"
+        },
+        {
+          "command": "gitCommander.stashSave",
+          "when": "view == gitCommanderCockpit",
+          "group": "navigation@7"
         },
         {
           "command": "gitCommander.commit",
-          "when": "view == gitCommanderWorkingTree",
-          "group": "navigation"
+          "when": "view == gitCommanderCockpit",
+          "group": "navigation@8"
+        },
+        {
+          "command": "gitCommander.commitAmend",
+          "when": "view == gitCommanderCockpit",
+          "group": "navigation@9"
+        },
+        {
+          "command": "gitCommander.revertCommit",
+          "when": "view == gitCommanderCockpit",
+          "group": "navigation@10"
         }
       ],
-      "view/item/context": [
-        {
-          "command": "gitCommander.stage",
-          "when": "view == gitCommanderWorkingTree && viewItem == modified",
-          "group": "inline"
-        },
-        {
-          "command": "gitCommander.stage",
-          "when": "view == gitCommanderWorkingTree && viewItem == untracked",
-          "group": "inline"
-        },
-        {
-          "command": "gitCommander.unstage",
-          "when": "view == gitCommanderWorkingTree && viewItem == staged",
-          "group": "inline"
-        },
-        {
-          "command": "gitCommander.discard",
-          "when": "view == gitCommanderWorkingTree && viewItem == modified",
-          "group": "inline"
-        },
-        {
-          "command": "gitCommander.openFile",
-          "when": "view == gitCommanderWorkingTree",
-          "group": "inline@10"
-        },
-        {
-          "command": "gitCommander.openDiff",
-          "when": "view == gitCommanderWorkingTree && viewItem =~ /^file:/",
-          "group": "inline@9"
-        }
-      ]
+      "view/item/context": []
     },
     "configuration": {
       "title": "Git Commander",

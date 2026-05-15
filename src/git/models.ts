@@ -31,9 +31,3 @@ export interface Stash {
     message: string;
 }
 
-export interface RebaseCommit {
-    hash: string;
-    shortHash: string;
-    message: string;
-    action: 'pick' | 'reword' | 'squash' | 'drop';
-}

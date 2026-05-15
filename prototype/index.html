@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Git Commander Cockpit — Prototype</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#1e1e1e;color:#cccccc;display:flex;height:100vh;overflow:hidden}
+/* Layout */
+.vscode-frame{display:flex;width:100%;height:100%}
+.activity-bar{width:48px;background:#333333;display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:4px;border-right:1px solid #252526}
+.activity-btn{width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;color:#858585;font-size:18px;transition:color .15s}
+.activity-btn:hover,.activity-btn.active{color:#cccccc}
+.activity-btn.active{border-left:2px solid #007acc;color:#fff}
+.sidebar{width:300px;background:#252526;display:flex;flex-direction:column;border-right:1px solid #1e1e1e;overflow:hidden}
+.editor{flex:1;background:#1e1e1e;display:flex;align-items:center;justify-content:center;color:#555;font-size:13px}
+
+/* Panel header */
+.panel-header{height:35px;display:flex;align-items:center;padding:0 8px;gap:4px;border-bottom:1px solid #1e1e1e;flex-shrink:0}
+.panel-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#bbbbbb;flex:1}
+.toolbar{display:flex;gap:1px}
+.tb-btn{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:3px;cursor:pointer;color:#858585;font-size:14px;border:none;background:transparent;transition:background .12s,color .12s;position:relative}
+.tb-btn:hover{background:#3c3c3c;color:#cccccc}
+.tb-btn .tip{position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);background:#252526;border:1px solid #454545;color:#cccccc;font-size:11px;padding:2px 6px;border-radius:3px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:10}
+.tb-btn:hover .tip{opacity:1}
+
+/* Scroll area */
+.panel-body{flex:1;overflow-y:auto;overflow-x:hidden}
+.panel-body::-webkit-scrollbar{width:6px}
+.panel-body::-webkit-scrollbar-thumb{background:#424242;border-radius:3px}
+
+/* Section */
+.section{user-select:none}
+.section-header{height:24px;display:flex;align-items:center;padding:0 12px;cursor:pointer;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#bbbbbb;gap:6px;transition:background .1s}
+.section-header:hover{background:#2a2d2e}
+.section-header .chevron{font-size:10px;transition:transform .15s;display:inline-block}
+.section-header.collapsed .chevron{transform:rotate(-90deg)}
+.section-body{display:block}
+.section-header.collapsed + .section-body{display:none}
+
+/* Overview items */
+.ov-item{height:22px;display:flex;align-items:center;padding:0 12px 0 28px;gap:8px;font-size:12px;color:#cccccc}
+.ov-item .ov-icon{font-size:13px;color:#858585;width:16px;text-align:center}
+.ov-item .ov-label{color:#858585;min-width:80px}
+.ov-item .ov-val{color:#cccccc;font-weight:500}
+.ov-item .badge{background:#007acc;color:#fff;font-size:10px;padding:1px 5px;border-radius:8px;margin-left:4px}
+.ov-item .badge.behind{background:#e9674a}
+
+/* Group header */
+.group-header{height:24px;display:flex;align-items:center;padding:0 8px 0 20px;cursor:pointer;gap:6px;font-size:12px;color:#cccccc;transition:background .1s;position:relative}
+.group-header:hover{background:#2a2d2e}
+.group-header:hover .group-actions{opacity:1}
+.group-header .g-chevron{font-size:10px;transition:transform .15s;color:#858585}
+.group-header.collapsed .g-chevron{transform:rotate(-90deg)}
+.group-header .g-icon{font-size:13px;width:16px;text-align:center}
+.group-header .g-count{font-size:11px;color:#858585;margin-left:auto;padding-right:4px}
+.group-actions{opacity:0;display:flex;gap:2px;transition:opacity .12s}
+.g-act-btn{width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:2px;cursor:pointer;font-size:12px;color:#858585;transition:background .1s,color .1s}
+.g-act-btn:hover{background:#3c3c3c;color:#cccccc}
+.group-files{display:block}
+.group-header.collapsed + .group-files{display:none}
+
+/* File item */
+.file-item{height:22px;display:flex;align-items:center;padding:0 8px 0 36px;gap:6px;font-size:12px;cursor:pointer;transition:background .1s;position:relative}
+.file-item:hover{background:#2a2d2e}
+.file-item:hover .file-actions{opacity:1}
+.file-item .f-icon{font-size:12px;width:14px;text-align:center;flex-shrink:0}
+.file-item .f-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-item .f-status{font-size:11px;color:#858585}
+.file-actions{opacity:0;display:flex;gap:1px;transition:opacity .12s}
+.f-act-btn{width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:2px;font-size:11px;cursor:pointer;color:#858585;transition:background .1s,color .1s}
+.f-act-btn:hover{background:#3c3c3c;color:#cccccc}
+
+/* Action items */
+.action-item{height:22px;display:flex;align-items:center;padding:0 12px 0 28px;gap:8px;font-size:12px;cursor:pointer;transition:background .1s}
+.action-item:hover{background:#2a2d2e}
+.action-item .a-icon{font-size:13px;color:#858585;width:16px;text-align:center}
+.action-item .a-label{flex:1;color:#cccccc}
+.action-item .a-desc{font-size:11px;color:#585858;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px}
+
+/* Status bar */
+.status-bar{height:22px;background:#007acc;display:flex;align-items:center;padding:0 12px;gap:12px;font-size:12px;color:rgba(255,255,255,.9);flex-shrink:0}
+.sb-item{display:flex;align-items:center;gap:4px;cursor:pointer;padding:0 4px;border-radius:2px;transition:background .1s}
+.sb-item:hover{background:rgba(255,255,255,.15)}
+
+/* Colors */
+.mod{color:#e2c08d}.staged-c{color:#73c991}.untrack{color:#73c991}.del{color:#f14c4c}.conflict{color:#e4676b}
+.icon-branch::before{content:'⎇'}
+.icon-refresh::before{content:'↺'}
+.icon-plus::before{content:'+'}
+.icon-minus::before{content:'−'}
+.icon-discard::before{content:'⟲'}
+.icon-diff::before{content:'◑'}
+.icon-file::before{content:'📄'}
+.icon-check::before{content:'✓'}
+.icon-up::before{content:'↑'}
+.icon-down::before{content:'↓'}
+.icon-cloud::before{content:'↓'}
+.icon-history::before{content:'⟳'}
+.icon-stash::before{content:'▣'}
+.icon-edit::before{content:'✎'}
+.icon-reset::before{content:'↺'}
+.icon-new::before{content:'⊕'}
+.icon-open::before{content:'↗'}
+.icon-warn::before{content:'⚠'}
+
+/* Notification toast */
+.toast{position:fixed;bottom:30px;right:20px;background:#3c3c3c;border:1px solid #555;border-radius:4px;padding:8px 14px;font-size:12px;color:#cccccc;opacity:0;transform:translateY(8px);transition:all .2s;z-index:100}
+.toast.show{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+<div class="vscode-frame">
+  <!-- Activity Bar -->
+  <div class="activity-bar">
+    <div class="activity-btn" title="Explorer">📁</div>
+    <div class="activity-btn" title="Search">🔍</div>
+    <div class="activity-btn" title="Source Control">⎇</div>
+    <div class="activity-btn active" title="Git Commander">⚡</div>
+    <div class="activity-btn" title="Extensions">⧉</div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <!-- Toolbar -->
+    <div class="panel-header">
+      <span class="panel-title">Git Commander</span>
+      <div class="toolbar">
+        <button class="tb-btn" onclick="act('Refresh')">↺<span class="tip">Refresh</span></button>
+        <button class="tb-btn" onclick="act('Switch Branch')">⎇<span class="tip">Switch Branch</span></button>
+        <button class="tb-btn" onclick="act('Create Branch')">⊕<span class="tip">Create Branch</span></button>
+        <button class="tb-btn" onclick="act('Fetch')">☁<span class="tip">Fetch</span></button>
+        <button class="tb-btn" onclick="act('Pull')">↓<span class="tip">Pull</span></button>
+        <button class="tb-btn" onclick="act('Push')">↑<span class="tip">Push</span></button>
+        <button class="tb-btn" onclick="act('Stash')">▣<span class="tip">Stash Changes</span></button>
+        <button class="tb-btn" onclick="act('Commit')">✓<span class="tip">Commit</span></button>
+        <button class="tb-btn" onclick="act('Amend')">✎<span class="tip">Amend Last Commit</span></button>
+        <button class="tb-btn" onclick="act('Revert Commit')">⟳<span class="tip">Search &amp; Revert Commit</span></button>
+      </div>
+    </div>
+
+    <div class="panel-body">
+      <!-- OVERVIEW -->
+      <div class="section">
+        <div class="section-header" onclick="toggle(this)">
+          <span class="chevron">▾</span> Overview
+        </div>
+        <div class="section-body">
+          <div class="ov-item"><span class="ov-icon">⎇</span><span class="ov-label">Branch</span><span class="ov-val">feature/ui-prototype</span></div>
+          <div class="ov-item"><span class="ov-icon">🔗</span><span class="ov-label">Tracking</span><span class="ov-val">origin/feature/ui-prototype</span></div>
+          <div class="ov-item"><span class="ov-icon">↕</span><span class="ov-label">Sync Status</span><span class="ov-val"><span class="badge">3 ahead</span><span class="badge behind">1 behind</span></span></div>
+          <div class="ov-item"><span class="ov-icon">▣</span><span class="ov-label">Stashes</span><span class="ov-val">2 saved</span></div>
+        </div>
+      </div>
+
+      <!-- CHANGES -->
+      <div class="section">
+        <div class="section-header" onclick="toggle(this)">
+          <span class="chevron">▾</span> Changes
+        </div>
+        <div class="section-body">
+
+          <!-- Conflicted -->
+          <div class="group-header" onclick="toggleGroup(this)">
+            <span class="g-chevron">▾</span>
+            <span class="g-icon conflict">⚠</span>
+            <span style="color:#e4676b">Conflicted</span>
+            <span class="g-count">1 file</span>
+          </div>
+          <div class="group-files">
+            <div class="file-item">
+              <span class="f-icon conflict">⚠</span>
+              <span class="f-name conflict">src/merge-conflict.ts</span>
+              <span class="f-status">conflicted</span>
+              <div class="file-actions">
+                <div class="f-act-btn" title="Open File" onclick="act('Open File')">↗</div>
+                <div class="f-act-btn" title="Open Diff" onclick="act('Open Diff')">◑</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Staged -->
+          <div class="group-header" onclick="toggleGroup(this)">
+            <span class="g-chevron">▾</span>
+            <span class="g-icon staged-c">✓</span>
+            <span>Staged</span>
+            <span class="g-count">3 files</span>
+            <div class="group-actions">
+              <div class="g-act-btn" title="Unstage All" onclick="act('Unstage All')">−</div>
+            </div>
+          </div>
+          <div class="group-files">
+            <div class="file-item">
+              <span class="f-icon staged-c">+</span>
+              <span class="f-name">src/providers/workingTreeProvider.ts</span>
+              <span class="f-status">staged</span>
+              <div class="file-actions">
+                <div class="f-act-btn" title="Unstage" onclick="act('Unstage')">−</div>
+                <div class="f-act-btn" title="Discard" onclick="act('Discard')">⟲</div>
+                <div class="f-act-btn" title="Open Diff" onclick="act('Open Diff')">◑</div>
+                <div class="f-act-btn" title="Open File" onclick="act('Open File')">↗</div>
+              </div>
+            </div>
+            <div class="file-item">
+              <span class="f-icon staged-c">+</span>
+              <span class="f-name">src/commands/repoCommands.ts</span>
+              <span class="f-status">staged</span>
+              <div class="file-actions">
+                <div class="f-act-btn" title="Unstage" onclick="act('Unstage')">−</div>
+                <div class="f-act-btn" title="Discard" onclick="act('Discard')">⟲</div>
+                <div class="f-act-btn" title="Open Diff" onclick="act('Open Diff')">◑</div>
+                <div class="f-act-btn" title="Open File" onclick="act('Open File')">↗</div>
+              </div>
+            </div>
+            <div class="file-item">
+              <span class="f-icon staged-c">+</span>
+              <span class="f-name">package.json</span>
+              <span class="f-status">staged</span>
+              <div class="file-actions">
+                <div class="f-act-btn" title="Unstage" onclick="act('Unstage')">−</div>
+                <div class="f-act-btn" title="Discard" onclick="act('Discard')">⟲</div>
+                <div class="f-act-btn" title="Open Diff" onclick="act('Open Diff')">◑</div>
+                <div class="f-act-btn" title="Open File" onclick="act('Open File')">↗</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Unstaged -->
+          <div class="group-header" onclick="toggleGroup(this)">
+            <span class="g-chevron">▾</span>
+            <span class="g-icon mod">✎</span>
+            <span>Unstaged</span>
+            <span class="g-count">2 files</span>
+            <div class="group-actions">
+              <div class="g-act-btn" title="Stage All" onclick="act('Stage All')">+</div>
+            </div>
+          </div>
+          <div class="group-files">
+            <div class="file-item">
+              <span class="f-icon mod">~</span>
+              <span class="f-name">src/git/git.ts</span>
+              <span class="f-status">modified</span>
+              <div class="file-actions">
+                <div class="f-act-btn" title="Stage" onclick="act('Stage')">+</div>
+                <div class="f-act-btn" title="Discard" onclick="act('Discard')">⟲</div>
+                <div class="f-act-btn" title="Open Diff" onclick="act('Open Diff')">◑</div>
+                <div class="f-act-btn" title="Open File" onclick="act('Open File')">↗</div>
+              </div>
+            </div>
+            <div class="file-item">
+              <span class="f-icon del">−</span>
+              <span class="f-name">src/old-feature.ts</span>
+              <span class="f-status">deleted</span>
+              <div class="file-actions">
+                <div class="f-act-btn" title="Stage" onclick="act('Stage delete')">+</div>
+                <div class="f-act-btn" title="Discard" onclick="act('Discard')">⟲</div>
+                <div class="f-act-btn" title="Open Diff" onclick="act('Open Diff')">◑</div>
+                <div class="f-act-btn" title="Open File" onclick="act('Open File')">↗</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Untracked -->
+          <div class="group-header" onclick="toggleGroup(this)">
+            <span class="g-chevron">▾</span>
+            <span class="g-icon untrack">+</span>
+            <span>Untracked</span>
+            <span class="g-count">2 files</span>
+            <div class="group-actions">
+              <div class="g-act-btn" title="Stage All" onclick="act('Stage All Untracked')">+</div>
+            </div>
+          </div>
+          <div class="group-files">
+            <div class="file-item">
+              <span class="f-icon untrack">U</span>
+              <span class="f-name">prototype/index.html</span>
+              <span class="f-status">new</span>
+              <div class="file-actions">
+                <div class="f-act-btn" title="Stage" onclick="act('Stage')">+</div>
+                <div class="f-act-btn" title="Discard (delete)" onclick="act('Delete untracked')">⟲</div>
+                <div class="f-act-btn" title="Open Diff" onclick="act('Open Diff')">◑</div>
+                <div class="f-act-btn" title="Open File" onclick="act('Open File')">↗</div>
+              </div>
+            </div>
+            <div class="file-item">
+              <span class="f-icon untrack">U</span>
+              <span class="f-name">prototype/readme.md</span>
+              <span class="f-status">new</span>
+              <div class="file-actions">
+                <div class="f-act-btn" title="Stage" onclick="act('Stage')">+</div>
+                <div class="f-act-btn" title="Discard (delete)" onclick="act('Delete untracked')">⟲</div>
+                <div class="f-act-btn" title="Open Diff" onclick="act('Open Diff')">◑</div>
+                <div class="f-act-btn" title="Open File" onclick="act('Open File')">↗</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTIONS -->
+      <div class="section">
+        <div class="section-header" onclick="toggle(this)">
+          <span class="chevron">▾</span> Actions
+        </div>
+        <div class="section-body">
+          <div class="action-item" onclick="act('Switch Branch')"><span class="a-icon">⎇</span><span class="a-label">Switch Branch</span><span class="a-desc">checkout another local branch</span></div>
+          <div class="action-item" onclick="act('Create Branch')"><span class="a-icon">⊕</span><span class="a-label">Create Branch</span><span class="a-desc">start a new branch from HEAD</span></div>
+          <div class="action-item" onclick="act('Fetch')"><span class="a-icon">☁</span><span class="a-label">Fetch</span><span class="a-desc">update remote refs safely</span></div>
+          <div class="action-item" onclick="act('Pull')"><span class="a-icon">↓</span><span class="a-label">Pull</span><span class="a-desc">fast-forward from upstream</span></div>
+          <div class="action-item" onclick="act('Push')"><span class="a-icon">↑</span><span class="a-label">Push</span><span class="a-desc">publish local commits</span></div>
+          <div class="action-item" onclick="act('Stash')"><span class="a-icon">▣</span><span class="a-label">Stash Changes</span><span class="a-desc">save work-in-progress safely</span></div>
+          <div class="action-item" onclick="act('Commit')"><span class="a-icon">✓</span><span class="a-label">Commit</span><span class="a-desc">create a new commit</span></div>
+          <div class="action-item" onclick="act('Amend')"><span class="a-icon">✎</span><span class="a-label">Amend Last Commit</span><span class="a-desc">edit the message or content of HEAD</span></div>
+          <div class="action-item" onclick="act('Revert Last')"><span class="a-icon">⟳</span><span class="a-label">Revert Last Commit</span><span class="a-desc">create a revert for HEAD safely</span></div>
+          <div class="action-item" onclick="act('Search & Revert')"><span class="a-icon">⟳</span><span class="a-label">Search And Revert Commit</span><span class="a-desc">search by message, author, hash</span></div>
+          <div class="action-item" onclick="act('Revert Multiple')"><span class="a-icon">⟳</span><span class="a-label">Revert Multiple Commits</span><span class="a-desc">multi-select commits to revert</span></div>
+          <div class="action-item" onclick="act('Reset Commit')"><span class="a-icon">↺</span><span class="a-label">Reset Commit</span><span class="a-desc">soft / mixed / hard reset</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <div class="sb-item">⎇ feature/ui-prototype</div>
+      <div class="sb-item">↑3 ↓1</div>
+      <div class="sb-item">⚠ 1 conflict</div>
+    </div>
+  </div>
+
+  <!-- Editor area -->
+  <div class="editor">← Git Commander Cockpit sidebar prototype</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function toggle(header){
+  header.classList.toggle('collapsed');
+}
+function toggleGroup(header){
+  header.classList.toggle('collapsed');
+}
+let toastTimer;
+function act(label){
+  const t=document.getElementById('toast');
+  t.textContent='▶ '+label;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),1800);
+}
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import { FileStatus, FileStatusType, Commit, Branch, Stash } from './models';
+import { FileStatus, FileStatusType, Commit } from './models';
 
 export function parseStatus(output: string): FileStatus[] {
     const lines = output.split('\n').filter(line => line.length > 0);
@@ -24,7 +24,12 @@ export function parseStatus(output: string): FileStatus[] {
         }
 
         let status: FileStatusType;
-        if (indexStatus === 'U' || worktreeStatus === 'U' || indexStatus === 'A' && worktreeStatus === 'A' || indexStatus === 'D' && worktreeStatus === 'D') {
+        if (
+            indexStatus === 'U' ||
+            worktreeStatus === 'U' ||
+            (indexStatus === 'A' && worktreeStatus === 'A') ||
+            (indexStatus === 'D' && worktreeStatus === 'D')
+        ) {
             status = 'conflicted';
         } else if (indexStatus !== ' ' && indexStatus !== '?') {
             status = 'staged';
@@ -85,56 +90,6 @@ export function parseLog(output: string): Commit[] {
     }
 
     return commits;
-}
-
-export function parseBranches(output: string): Branch[] {
-    const lines = output.split('\n').filter(line => line.length > 0);
-    const branches: Branch[] = [];
-
-    for (const line of lines) {
-        const isCurrent = line.startsWith('*');
-        const clean = line.replace(/^\*?\s+/, '');
-        const parts = clean.split(' ');
-        const name = parts[0];
-        const isRemote = name.startsWith('remotes/');
-
-        let upstream: string | undefined;
-        const upstreamMatch = clean.match(/\[(.+?)\]/);
-        if (upstreamMatch) {
-            upstream = upstreamMatch[1];
-        }
-
-        branches.push({
-            name,
-            isCurrent,
-            isRemote,
-            upstream
-        });
-    }
-
-    return branches;
-}
-
-export function parseStash(output: string): Stash[] {
-    const lines = output.split('\n').filter(line => line.length > 0);
-    const stashes: Stash[] = [];
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const match = line.match(/^stash@\{(\d+)\}: (.+)$/);
-        if (!match) {
-            continue;
-        }
-
-        const hashMatch = line.match(/^([a-f0-9]+) /);
-        stashes.push({
-            index: parseInt(match[1], 10),
-            hash: hashMatch ? hashMatch[1] : '',
-            message: match[2]
-        });
-    }
-
-    return stashes;
 }
 
 export function parseCurrentBranch(output: string): string {

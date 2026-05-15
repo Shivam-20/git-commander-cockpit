@@ -138,6 +138,8 @@ export class WorkingTreeProvider implements vscode.TreeDataProvider<GitTreeNode>
         new ActionItem('Pull', 'fast-forward from upstream', 'gitCommander.pull', 'arrow-down'),
         new ActionItem('Push', 'publish local commits', 'gitCommander.push', 'arrow-up'),
         new ActionItem('Stash Changes', 'save work-in-progress safely', 'gitCommander.stashSave', 'archive'),
+        new ActionItem('Commit', 'create a new commit from staged changes', 'gitCommander.commit', 'check'),
+        new ActionItem('Amend Last Commit', 'edit the message or content of HEAD', 'gitCommander.commitAmend', 'edit'),
         new ActionItem('Revert Last Commit', 'create a revert for HEAD safely', 'gitCommander.revertLastCommit', 'history'),
         new ActionItem('Search And Revert Commit', 'search by message, author, or hash and revert one commit', 'gitCommander.revertCommit', 'history'),
         new ActionItem('Revert Multiple Commits', 'search and multi-select commits to revert together', 'gitCommander.revertMultipleCommits', 'history'),
@@ -203,7 +205,7 @@ export class WorkingTreeProvider implements vscode.TreeDataProvider<GitTreeNode>
 
     async unstage(item?: FileItem): Promise<void> {
         const path = item ? item.file.path : '.';
-        await execGit(['reset', 'HEAD', '--', path]);
+        await execGit(['restore', '--staged', '--', path]);
         this.refresh();
     }
 
@@ -228,11 +230,17 @@ export class WorkingTreeProvider implements vscode.TreeDataProvider<GitTreeNode>
                 if (uri) {
                     await vscode.workspace.fs.delete(uri);
                 }
+            } else if (item.file.status === 'staged') {
+                // Unstage first, then restore working tree
+                await execGit(['restore', '--staged', '--', item.file.path]);
+                await execGit(['restore', '--', item.file.path]).catch(() => { /* may not exist in worktree */ });
             } else {
-                await execGit(['checkout', '--', item.file.path]);
+                // Modified or deleted in worktree
+                await execGit(['restore', '--', item.file.path]);
             }
         } else {
-            await execGit(['checkout', '--', '.']);
+            // Discard all unstaged changes (restore tracked files)
+            await execGit(['restore', '--', '.']);
         }
         this.refresh();
     }
@@ -257,11 +265,16 @@ export class WorkingTreeProvider implements vscode.TreeDataProvider<GitTreeNode>
         }
 
         const repoRelativePath = item.file.path.replace(/\\/g, '/');
+        // Staged files: diff index vs working tree (ref: '' = index)
+        // All other files: diff HEAD vs working tree
+        const ref = item.file.status === 'staged' ? '' : 'HEAD';
         const left = uri.with({
             scheme: 'git',
-            query: JSON.stringify({ path: repoRelativePath, ref: 'HEAD' })
+            query: JSON.stringify({ path: repoRelativePath, ref })
         });
-        const title = `${item.file.path} (Working Tree)`;
+        const title = item.file.status === 'staged'
+            ? `${item.file.path} (Index ↔ Working Tree)`
+            : `${item.file.path} (Working Tree)`;
         await vscode.commands.executeCommand('vscode.diff', left, uri, title);
     }
 

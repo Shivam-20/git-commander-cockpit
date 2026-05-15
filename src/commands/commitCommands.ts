@@ -17,12 +17,12 @@ export async function commitCommand(): Promise<void> {
 }
 
 export async function commitAmendCommand(): Promise<void> {
-    // Check if last commit is already pushed
+    // Check if the last commit has already been pushed to upstream
     try {
-        const upstream = await execGit(['rev-parse', '--abbrev-ref', '@{upstream}']);
-        if (upstream) {
+        const unpushedCount = await execGit(['rev-list', '--count', 'HEAD', '^@{upstream}']);
+        if (unpushedCount.trim() === '0') {
             const result = await vscode.window.showWarningMessage(
-                'The last commit appears to have an upstream branch. Amending may require force-push. Continue?',
+                'The last commit has already been pushed. Amending will require a force-push. Continue?',
                 { modal: true },
                 'Amend'
             );
@@ -31,7 +31,7 @@ export async function commitAmendCommand(): Promise<void> {
             }
         }
     } catch {
-        // No upstream, safe to amend
+        // No upstream configured — safe to amend without warning
     }
 
     const currentMessage = await execGit(['log', '-1', '--pretty=%B']).catch(() => '');
