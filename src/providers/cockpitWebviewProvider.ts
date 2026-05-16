@@ -261,6 +261,9 @@ function render(s){
   \${actRow('⚙','Configure Repository','set user name/email or open raw config','gitCommander.repoConfig')}
   \${actRow('⏳','Git Time Machine','view reflog and revert to past states','gitCommander.timeMachine')}
   \${actRow('⎌','Undo Last Action','undo last commit, reset, or rebase','gitCommander.undoLast')}
+  \${actRow('📦','Git LFS Manager','scan and track large files with LFS','gitCommander.lfsManager')}
+  \${actRow('📤','Export to Patch','export uncommitted changes to a .patch file','gitCommander.exportPatch')}
+  \${actRow('📥','Apply Patch','apply a .patch file to your working tree','gitCommander.applyPatch')}
 </div>\`;
 }
 

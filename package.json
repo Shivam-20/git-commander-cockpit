@@ -3,7 +3,7 @@
   "displayName": "Git Commander Cockpit",
   "description": "Complex Git, One Click Away",
   "icon": "resources/icons/marketplace-icon.png",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "tryToDEv",
   "engines": {
     "vscode": "^1.85.0"
@@ -170,6 +170,21 @@
         "command": "gitCommander.repoConfig",
         "title": "Configure Repository",
         "icon": "$(settings-gear)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.lfsManager",
+        "title": "Git LFS Manager",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.exportPatch",
+        "title": "Export to Patch",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.applyPatch",
+        "title": "Apply Patch",
         "category": "Git Commander"
       }
     ],

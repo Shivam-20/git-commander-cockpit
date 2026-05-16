@@ -360,3 +360,137 @@ export async function repoConfigCommand(): Promise<void> {
         }
     }
 }
+
+export async function lfsManagerCommand(): Promise<void> {
+    try {
+        await execGit(['lfs', 'version']);
+    } catch {
+        vscode.window.showErrorMessage('Git LFS is not installed or initialized on your system.');
+        return;
+    }
+
+    const action = await vscode.window.showQuickPick([
+        { label: 'Track New File/Extension', description: 'e.g., *.mp4, *.psd' },
+        { label: 'List Tracked Files' }
+    ], { placeHolder: 'Git LFS Manager' });
+
+    if (!action) return;
+
+    if (action.label.startsWith('Track')) {
+        const pattern = await vscode.window.showInputBox({
+            prompt: 'Enter file pattern to track with LFS (e.g., *.mp4)'
+        });
+        if (pattern) {
+            await runGitWithProgress('Tracking with LFS...', ['lfs', 'track', pattern]);
+            await execGit(['add', '.gitattributes']).catch(() => {});
+            vscode.window.showInformationMessage(`Tracking ${pattern} with Git LFS. (.gitattributes staged)`);
+        }
+    } else {
+        const tracked = await execGit(['lfs', 'ls-files']).catch(() => '');
+        if (!tracked) {
+            vscode.window.showInformationMessage('No LFS tracked files found.');
+            return;
+        }
+        vscode.window.showInformationMessage(`LFS Tracked Files:\n${tracked}`, { modal: true });
+    }
+}
+
+export async function exportPatchCommand(): Promise<void> {
+    const exportMode = await vscode.window.showQuickPick([
+        { label: 'Uncommitted Changes', description: 'Export your current working tree and staged changes' },
+        { label: 'Stashes', description: 'Select one or more stashes to export' }
+    ], { placeHolder: 'What would you like to export as a patch?' });
+
+    if (!exportMode) return;
+
+    let diffContent = '';
+
+    if (exportMode.label === 'Uncommitted Changes') {
+        const diff = await execGit(['diff', 'HEAD']).catch(() => '');
+        if (!diff) {
+            vscode.window.showInformationMessage('No changes to export.');
+            return;
+        }
+        diffContent = diff;
+    } else {
+        const stashes = await execGit(['stash', 'list']).catch(() => '');
+        if (!stashes) {
+            vscode.window.showInformationMessage('No stashes found.');
+            return;
+        }
+
+        const stashItems = stashes.split('\n').filter(Boolean).map(line => {
+            const ref = line.split(':')[0];
+            return { label: ref, description: line.slice(ref.length + 2) };
+        });
+
+        const selectedStashes = await vscode.window.showQuickPick(stashItems, {
+            canPickMany: true,
+            placeHolder: 'Select stashes to export (Check multiple if desired)'
+        });
+
+        if (!selectedStashes || selectedStashes.length === 0) return;
+
+        for (const s of selectedStashes) {
+            const sDiff = await execGit(['stash', 'show', '-p', s.label]).catch(() => '');
+            if (sDiff) {
+                diffContent += `\n# --- Exported from ${s.label} ---\n${sDiff}\n`;
+            }
+        }
+
+        if (!diffContent.trim()) {
+            vscode.window.showInformationMessage('Selected stashes are empty or could not be generated.');
+            return;
+        }
+    }
+
+    const uri = await vscode.window.showSaveDialog({
+        saveLabel: 'Save Patch',
+        filters: { 'Patch Files': ['patch'] },
+        defaultUri: vscode.workspace.workspaceFolders ? vscode.Uri.file(`${vscode.workspace.workspaceFolders[0].uri.fsPath}/changes.patch`) : undefined
+    });
+
+    if (!uri) return;
+
+    const encoder = new TextEncoder();
+    await vscode.workspace.fs.writeFile(uri, encoder.encode(diffContent.trim() + '\n'));
+    vscode.window.showInformationMessage('Patch exported successfully.');
+}
+
+export async function applyPatchCommand(): Promise<void> {
+    const uris = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        openLabel: 'Apply Patch',
+        filters: { 'Patch Files': ['patch'], 'All Files': ['*'] }
+    });
+
+    if (!uris || uris.length === 0) return;
+
+    const path = uris[0].fsPath;
+    
+    try {
+        await runGitWithProgress('Applying Patch...', ['apply', '--whitespace=nowarn', path]);
+        vscode.window.showInformationMessage('Patch applied successfully.');
+    } catch (e: any) {
+        let errorMsg = e.stderr ? e.stderr : (e.message || 'Unknown error');
+        // If it's too long, truncate it so the dialog isn't massive
+        if (errorMsg.length > 300) {
+            errorMsg = errorMsg.substring(0, 300) + '...';
+        }
+        
+        const res = await vscode.window.showWarningMessage(
+            `Failed to apply patch cleanly:\n${errorMsg}\n\nForce apply what you can?`,
+            { modal: true },
+            'Force Apply (--reject)'
+        );
+        
+        if (res === 'Force Apply (--reject)') {
+            try {
+                await runGitWithProgress('Force Applying Patch...', ['apply', '--reject', '--whitespace=nowarn', path]);
+                vscode.window.showInformationMessage('Patch applied with conflicts. Check for .rej files.');
+            } catch (err: any) {
+                vscode.window.showWarningMessage('Patch partially applied with conflicts. Please review the generated .rej files in your workspace.');
+            }
+        }
+    }
+}

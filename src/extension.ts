@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { CockpitWebviewProvider } from './providers/cockpitWebviewProvider';
 import { commitCommand, commitAmendCommand } from './commands/commitCommands';
-import { createBranchCommand, fetchCommand, pullCommand, pushCommand, resetCommitCommand, revertLastCommitCommand, revertMultipleCommitsCommand, revertRecentCommitCommand, stashSaveCommand, switchBranchCommand, timeMachineCommand, undoLastCommand, repoConfigCommand } from './commands/repoCommands';
+import { createBranchCommand, fetchCommand, pullCommand, pushCommand, resetCommitCommand, revertLastCommitCommand, revertMultipleCommitsCommand, revertRecentCommitCommand, stashSaveCommand, switchBranchCommand, timeMachineCommand, undoLastCommand, repoConfigCommand, lfsManagerCommand, exportPatchCommand, applyPatchCommand } from './commands/repoCommands';
 import { clearRepoCache } from './git/git';
 import { showError } from './utils/logger';
 
@@ -77,6 +77,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
         vscode.commands.registerCommand('gitCommander.repoConfig', async () => {
             try { await repoConfigCommand(); refresh(); } catch (e) { showError('Failed to configure repo', e); }
+        }),
+        vscode.commands.registerCommand('gitCommander.lfsManager', async () => {
+            try { await lfsManagerCommand(); refresh(); } catch (e) { showError('Failed to manage LFS', e); }
+        }),
+        vscode.commands.registerCommand('gitCommander.exportPatch', async () => {
+            try { await exportPatchCommand(); } catch (e) { showError('Failed to export patch', e); }
+        }),
+        vscode.commands.registerCommand('gitCommander.applyPatch', async () => {
+            try { await applyPatchCommand(); refresh(); } catch (e) { showError('Failed to apply patch', e); }
         })
     );
 
