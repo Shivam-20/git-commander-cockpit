@@ -106,7 +106,7 @@ export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
         if (!folders) { return; }
         const uri = vscode.Uri.joinPath(folders[0].uri, path);
         const ref = status === 'staged' ? '' : 'HEAD';
-        const left = uri.with({ scheme: 'git', query: JSON.stringify({ path, ref }) });
+        const left = uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.fsPath, ref }) });
         const title = status === 'staged'
             ? `${path} (Index ↔ Working Tree)`
             : `${path} (Working Tree)`;
@@ -183,6 +183,14 @@ body{font-family:var(--vscode-font-family,'Segoe UI',system-ui,sans-serif);font-
 const vsc = acquireVsCodeApi();
 function send(msg){ vsc.postMessage(msg); }
 
+function stageFile(e, path) { if(e) e.stopPropagation(); send({type:'stage', path}); }
+function unstageFile(e, path) { if(e) e.stopPropagation(); send({type:'unstage', path}); }
+function discardFile(e, path, status) { if(e) e.stopPropagation(); send({type:'discard', path, status}); }
+function openDiff(e, path, status) { if(e) e.stopPropagation(); send({type:'openDiff', path, status}); }
+function openFile(e, path) { if(e) e.stopPropagation(); send({type:'openFile', path}); }
+function stageAll(e) { if(e) e.stopPropagation(); send({type:'stageAll', scope:'.'}); }
+function unstageAll(e) { if(e) e.stopPropagation(); send({type:'unstageAll'}); }
+
 window.addEventListener('message', e => {
   const msg = e.data;
   if(msg.type === 'state') render(msg.state);
@@ -251,9 +259,9 @@ function grpBlock(id,icon,cls,label,files,bucket){
   if(!files.length) return '';
   const lbl = \`<span class="grp-icon \${cls}">\${icon}</span><span class="grp-lbl">\${label}</span><span class="grp-cnt">\${files.length} file\${files.length!==1?'s':''}</span>\`;
   let acts='';
-  if(bucket==='staged')    acts=\`<button class="ga-btn" title="Unstage All" onclick="event.stopPropagation();send({type:'unstageAll'})">−</button>\`;
-  if(bucket==='unstaged')  acts=\`<button class="ga-btn" title="Stage All" onclick="event.stopPropagation();send({type:'stageAll',scope:'.'})">+</button>\`;
-  if(bucket==='untracked') acts=\`<button class="ga-btn" title="Stage All Untracked" onclick="event.stopPropagation();send({type:'stageAll',scope:'.'})">+</button>\`;
+  if(bucket==='staged')    acts=\`<button class="ga-btn" title="Unstage All" onclick="event.stopPropagation();unstageAll()">−</button>\`;
+  if(bucket==='unstaged')  acts=\`<button class="ga-btn" title="Stage All" onclick="event.stopPropagation();stageAll('.')">+</button>\`;
+  if(bucket==='untracked') acts=\`<button class="ga-btn" title="Stage All Untracked" onclick="event.stopPropagation();stageAll('.')">+</button>\`;
   return \`<div class="grp-hdr" onclick="toggleGrp(this)"><span class="g-chev">▾</span>\${lbl}<div class="grp-acts">\${acts}</div></div>
 <div class="grp-files">\${files.map(f=>fileRow(f,bucket)).join('')}</div>\`;
 }
@@ -267,13 +275,15 @@ function fileRow(f,bucket){
   else if(bucket==='untracked'){ico='U';cls='c-new';}
   else if(bucket==='conflict'){ico='⚠';cls='c-conflict';}
 
-  const stageBtn  = (bucket!=='staged'&&bucket!=='conflict') ? \`<button class="fa-btn" title="Stage" onclick="event.stopPropagation();send({type:'stage',path:'\${p}'})">+</button>\` : '';
-  const unstageBtn= (bucket==='staged') ? \`<button class="fa-btn" title="Unstage" onclick="event.stopPropagation();send({type:'unstage',path:'\${p}'})">−</button>\` : '';
-  const discardBtn= (bucket!=='conflict') ? \`<button class="fa-btn" title="Discard" onclick="event.stopPropagation();send({type:'discard',path:'\${p}',status:'\${f.status}'})">⟲</button>\` : '';
-  const diffBtn   = (bucket!=='untracked') ? \`<button class="fa-btn" title="Open Changes" onclick="event.stopPropagation();send({type:'openDiff',path:'\${p}',status:'\${f.status}'})">◑</button>\` : '';
-  const fileBtn   = \`<button class="fa-btn" title="Open File" onclick="event.stopPropagation();send({type:'openFile',path:'\${p}'})">↗</button>\`;
+  const ds = \`data-path="\${escHtml(f.path)}" data-status="\${escHtml(f.status)}"\`;
 
-  return \`<div class="file-row" onclick="send({type:'openDiff',path:'\${p}',status:'\${f.status}'})">
+  const stageBtn  = (bucket!=='staged'&&bucket!=='conflict') ? \`<button class="fa-btn" title="Stage" \${ds} onclick="stageFile(event, this.dataset.path)">+</button>\` : '';
+  const unstageBtn= (bucket==='staged') ? \`<button class="fa-btn" title="Unstage" \${ds} onclick="unstageFile(event, this.dataset.path)">−</button>\` : '';
+  const discardBtn= (bucket!=='conflict') ? \`<button class="fa-btn" title="Discard" \${ds} onclick="discardFile(event, this.dataset.path, this.dataset.status)">⟲</button>\` : '';
+  const diffBtn   = (bucket!=='untracked') ? \`<button class="fa-btn" title="Open Changes" \${ds} onclick="openDiff(event, this.dataset.path, this.dataset.status)">◑</button>\` : '';
+  const fileBtn   = \`<button class="fa-btn" title="Open File" \${ds} onclick="openFile(event, this.dataset.path)">↗</button>\`;
+
+  return \`<div class="file-row" \${ds} onclick="openDiff(event, this.dataset.path, this.dataset.status)">
   <span class="f-ico \${cls}">\${ico}</span>
   <span class="f-name" title="\${p}">\${name}</span>
   <span class="f-tag">\${tag}</span>

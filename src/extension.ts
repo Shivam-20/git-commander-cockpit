@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { CockpitWebviewProvider } from './providers/cockpitWebviewProvider';
 import { commitCommand, commitAmendCommand } from './commands/commitCommands';
-import { createBranchCommand, fetchCommand, pullCommand, pushCommand, resetCommitCommand, revertLastCommitCommand, revertMultipleCommitsCommand, revertRecentCommitCommand, stashSaveCommand, switchBranchCommand } from './commands/repoCommands';
+import { createBranchCommand, fetchCommand, pullCommand, pushCommand, resetCommitCommand, revertLastCommitCommand, revertMultipleCommitsCommand, revertRecentCommitCommand, stashSaveCommand, switchBranchCommand, timeMachineCommand, undoLastCommand, repoConfigCommand } from './commands/repoCommands';
 import { clearRepoCache } from './git/git';
 import { showError } from './utils/logger';
 
@@ -68,6 +68,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
         vscode.commands.registerCommand('gitCommander.commitAmend', async () => {
             try { await commitAmendCommand(); refresh(); } catch (e) { showError('Failed to amend commit', e); }
+        }),
+        vscode.commands.registerCommand('gitCommander.timeMachine', async () => {
+            try { await timeMachineCommand(); refresh(); } catch (e) { showError('Failed to run time machine', e); }
+        }),
+        vscode.commands.registerCommand('gitCommander.undoLast', async () => {
+            try { await undoLastCommand(); refresh(); } catch (e) { showError('Failed to undo last action', e); }
+        }),
+        vscode.commands.registerCommand('gitCommander.repoConfig', async () => {
+            try { await repoConfigCommand(); refresh(); } catch (e) { showError('Failed to configure repo', e); }
         })
     );
 

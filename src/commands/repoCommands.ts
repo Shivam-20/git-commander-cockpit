@@ -261,3 +261,80 @@ export async function resetCommitCommand(): Promise<void> {
     await runGitWithProgress(`Resetting branch with --${mode}...`, ['reset', `--${mode}`, target.hash]);
     vscode.window.showInformationMessage(`Reset current branch to ${target.shortHash} with --${mode}.`);
 }
+
+export async function timeMachineCommand(): Promise<void> {
+    const reflog = await execGit(['reflog', '-n', '50', '--format=%h %gs']);
+    if (!reflog.trim()) {
+        vscode.window.showInformationMessage('Reflog is empty.');
+        return;
+    }
+
+    const items = reflog.split('\n').filter(Boolean).map(line => {
+        const hash = line.slice(0, 7);
+        const message = line.slice(8);
+        return { label: hash, description: message, hash };
+    });
+
+    const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Select a reflog entry to reset to (Warning: Destructive!)'
+    });
+
+    if (selected) {
+        const confirmed = await showDestructiveConfirmation(`Reset hard to ${selected.hash}?`, [
+            `This will move HEAD to ${selected.hash}`,
+            'All current uncommitted changes will be lost'
+        ]);
+        if (confirmed) {
+            await runGitWithProgress('Resetting via Time Machine...', ['reset', '--hard', selected.hash]);
+            vscode.window.showInformationMessage(`Time Machine reset to ${selected.hash}`);
+        }
+    }
+}
+
+export async function undoLastCommand(): Promise<void> {
+    const confirmed = await showDestructiveConfirmation('Undo last Git action?', [
+        'This will run `git reset --hard HEAD@{1}`',
+        'All current uncommitted changes will be lost',
+        'This undoes the last commit, reset, rebase, or merge'
+    ]);
+    if (confirmed) {
+        await runGitWithProgress('Undoing last action...', ['reset', '--hard', 'HEAD@{1}']);
+        vscode.window.showInformationMessage('Successfully undid last Git action.');
+    }
+}
+
+export async function repoConfigCommand(): Promise<void> {
+    const actions = [
+        { label: 'Set User Name', config: 'user.name' },
+        { label: 'Set User Email', config: 'user.email' },
+        { label: 'Edit .git/config (Raw)', config: 'raw' }
+    ];
+
+    const selected = await vscode.window.showQuickPick(actions, { placeHolder: 'Select repository configuration' });
+    if (!selected) return;
+
+    if (selected.config === 'raw') {
+        const gitDir = await execGit(['rev-parse', '--absolute-git-dir']);
+        const configUri = vscode.Uri.file(gitDir.trim() + '/config');
+        const doc = await vscode.workspace.openTextDocument(configUri);
+        await vscode.window.showTextDocument(doc);
+        return;
+    }
+
+    const currentVal = await execGit(['config', selected.config]).catch(() => '');
+    
+    const newVal = await vscode.window.showInputBox({
+        prompt: `Enter new value for ${selected.config} (Local to repo)`,
+        value: currentVal.trim()
+    });
+
+    if (newVal !== undefined) {
+        if (newVal.trim() === '') {
+            await execGit(['config', '--unset', selected.config]).catch(() => {});
+            vscode.window.showInformationMessage(`Unset local ${selected.config}`);
+        } else {
+            await execGit(['config', '--local', selected.config, newVal.trim()]);
+            vscode.window.showInformationMessage(`Updated local ${selected.config} to ${newVal.trim()}`);
+        }
+    }
+}
