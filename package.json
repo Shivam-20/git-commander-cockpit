@@ -8,6 +8,10 @@
   "engines": {
     "vscode": "^1.85.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Shivam-20/git-commander-cockpit.git"
+  },
   "categories": [
     "SCM Providers",
     "Other"
