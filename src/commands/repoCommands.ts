@@ -307,6 +307,11 @@ export async function repoConfigCommand(): Promise<void> {
     const actions = [
         { label: 'Set User Name', config: 'user.name' },
         { label: 'Set User Email', config: 'user.email' },
+        { label: 'Pull Rebase Strategy (pull.rebase)', config: 'pull.rebase', options: ['true', 'false', 'interactive'] },
+        { label: 'Pull Fast-Forward Only (pull.ff)', config: 'pull.ff', options: ['only', 'true', 'false'] },
+        { label: 'Auto CRLF (core.autocrlf)', config: 'core.autocrlf', options: ['true', 'false', 'input'] },
+        { label: 'Auto Prune Fetches (fetch.prune)', config: 'fetch.prune', options: ['true', 'false'] },
+        { label: 'Default Branch Name (init.defaultBranch)', config: 'init.defaultBranch' },
         { label: 'Edit .git/config (Raw)', config: 'raw' }
     ];
 
@@ -323,10 +328,27 @@ export async function repoConfigCommand(): Promise<void> {
 
     const currentVal = await execGit(['config', selected.config]).catch(() => '');
     
-    const newVal = await vscode.window.showInputBox({
-        prompt: `Enter new value for ${selected.config} (Local to repo)`,
-        value: currentVal.trim()
-    });
+    let newVal: string | undefined;
+    
+    if (selected.options) {
+        const items = selected.options.map(opt => ({
+            label: opt,
+            description: currentVal.trim() === opt ? '(Current)' : ''
+        }));
+        items.push({ label: 'Unset (Remove config)', description: '' });
+        
+        const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: `Select value for ${selected.config}`
+        });
+        if (picked) {
+            newVal = picked.label === 'Unset (Remove config)' ? '' : picked.label;
+        }
+    } else {
+        newVal = await vscode.window.showInputBox({
+            prompt: `Enter new value for ${selected.config} (Local to repo, clear to unset)`,
+            value: currentVal.trim()
+        });
+    }
 
     if (newVal !== undefined) {
         if (newVal.trim() === '') {
