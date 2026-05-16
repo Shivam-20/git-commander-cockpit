@@ -3,7 +3,7 @@
   "displayName": "Git Commander Cockpit",
   "description": "Complex Git, One Click Away",
   "icon": "resources/icons/marketplace-icon.png",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "publisher": "tryToDEv",
   "engines": {
     "vscode": "^1.85.0"
@@ -185,6 +185,21 @@
       {
         "command": "gitCommander.applyPatch",
         "title": "Apply Patch",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.oopsMacros",
+        "title": "Oops! Quick Fixes",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.cleanMergedBranches",
+        "title": "Clean Merged Branches",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.wipBackup",
+        "title": "Cloud WIP Checkpoint",
         "category": "Git Commander"
       }
     ],

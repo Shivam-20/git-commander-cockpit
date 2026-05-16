@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildChangeGroups } from '../git/repoState';
-import { parseAheadBehind, parseCurrentBranch, parseUpstreamRef } from '../git/parser';
+import { parseAheadBehind, parseCurrentBranch, parseUpstreamRef, parseMergedBranches } from '../git/parser';
 import { FileStatus } from '../git/models';
 
 test('parseCurrentBranch falls back to detached head label', () => {
@@ -32,4 +32,10 @@ test('buildChangeGroups orders cockpit buckets by urgency', () => {
     assert.deepEqual(groups.map((group) => group.id), ['conflicted', 'staged', 'unstaged', 'untracked']);
     assert.equal(groups[0].files[0].path, 'conflict.ts');
     assert.equal(groups[2].files[0].path, 'edited.ts');
+});
+
+test('parseMergedBranches ignores the current branch and protected branches', () => {
+    const gitOutput = '  feature/foo\n* main\n  dev\n  bugfix/bar\n  master\n';
+    const branches = parseMergedBranches(gitOutput, 'main');
+    assert.deepEqual(branches, ['feature/foo', 'bugfix/bar']);
 });

@@ -120,3 +120,9 @@ export function parseAheadBehind(output: string): { ahead: number; behind: numbe
         behind: Number.isFinite(behind) ? behind : 0
     };
 }
+
+export function parseMergedBranches(output: string, currentBranch: string): string[] {
+    return output.split('\n')
+        .map(b => b.replace(/^\*?\s+/, '').trim())
+        .filter(b => b && b !== currentBranch.trim() && !['main', 'master', 'dev', 'development'].includes(b));
+}

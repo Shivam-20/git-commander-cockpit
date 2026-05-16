@@ -187,7 +187,23 @@ body{font-family:var(--vscode-font-family,'Segoe UI',system-ui,sans-serif);font-
 <div id="root"><div class="loading"><span class="spinner">↺</span> Loading...</div></div>
 <script>
 const vsc = acquireVsCodeApi();
+let state = vsc.getState() || { col: {} };
+
 function send(msg){ vsc.postMessage(msg); }
+function saveState() { vsc.setState(state); }
+
+function toggleSec(hdr){ 
+  hdr.classList.toggle('collapsed'); 
+  const key = hdr.textContent.trim();
+  state.col[key] = hdr.classList.contains('collapsed');
+  saveState();
+}
+function toggleGrp(hdr){ 
+  hdr.classList.toggle('collapsed'); 
+  const key = hdr.querySelector('.grp-lbl').textContent.trim();
+  state.col[key] = hdr.classList.contains('collapsed');
+  saveState();
+}
 
 function stageFile(e, path) { if(e) e.stopPropagation(); send({type:'stage', path}); }
 function unstageFile(e, path) { if(e) e.stopPropagation(); send({type:'unstage', path}); }
@@ -199,7 +215,18 @@ function unstageAll(e) { if(e) e.stopPropagation(); send({type:'unstageAll'}); }
 
 window.addEventListener('message', e => {
   const msg = e.data;
-  if(msg.type === 'state') render(msg.state);
+  if(msg.type === 'state') {
+    render(msg.state);
+    
+    // Restore collapsed state
+    document.querySelectorAll('.sec-hdr').forEach(hdr => {
+      if(state.col[hdr.textContent.trim()]) hdr.classList.add('collapsed');
+    });
+    document.querySelectorAll('.grp-hdr').forEach(hdr => {
+      const lbl = hdr.querySelector('.grp-lbl');
+      if(lbl && state.col[lbl.textContent.trim()]) hdr.classList.add('collapsed');
+    });
+  }
   else if(msg.type === 'noRepo') document.getElementById('root').innerHTML =
     '<div class="empty">No Git repository found in this workspace.</div>';
 });
@@ -240,30 +267,41 @@ function render(s){
   \${grpBlock('untracked','+','c-new','Untracked',untracked,'untracked')}
 </div>
 
-<div class="sec-hdr" onclick="toggleSec(this)"><span class="chevron">▾</span>Actions</div>
+<div class="sec-hdr" onclick="toggleSec(this)"><span class="chevron">▾</span>Commits & Changes</div>
+<div class="sec-body">
+  \${actRow('✓','Commit','create a new commit','gitCommander.commit')}
+  \${actRow('✎','Amend Last Commit','edit HEAD message or content','gitCommander.commitAmend')}
+  \${actRow('▣','Stash Changes','save work-in-progress','gitCommander.stashSave')}
+</div>
+
+<div class="sec-hdr" onclick="toggleSec(this)"><span class="chevron">▾</span>Branch & Remote</div>
 <div class="sec-body">
   \${actRow('⎇','Switch Branch','checkout another branch','gitCommander.switchBranch')}
   \${actRow('⊕','Create Branch','start a new branch from HEAD','gitCommander.createBranch')}
   \${actRow('☁','Fetch','update remote refs safely','gitCommander.fetch')}
   \${actRow('↓','Pull','fast-forward from upstream','gitCommander.pull')}
   \${actRow('↑','Push','publish local commits','gitCommander.push')}
-  \${actRow('▣','Stash Changes','save work-in-progress','gitCommander.stashSave')}
-  \${actRow('✓','Commit','create a new commit','gitCommander.commit')}
-  \${actRow('✎','Amend Last Commit','edit HEAD message or content','gitCommander.commitAmend')}
+</div>
+
+<div class="sec-hdr" onclick="toggleSec(this)"><span class="chevron">▾</span>History & Revert</div>
+<div class="sec-body">
+  \${actRow('⎌','Undo Last Action','undo last commit, reset, or rebase','gitCommander.undoLast')}
+  \${actRow('⏳','Git Time Machine','view reflog and revert to past states','gitCommander.timeMachine')}
   \${actRow('⟳','Revert Last Commit','create a revert for HEAD','gitCommander.revertLastCommit')}
   \${actRow('⟳','Search & Revert Commit','find and revert a commit','gitCommander.revertCommit')}
   \${actRow('⟳','Revert Multiple Commits','multi-select commits to revert','gitCommander.revertMultipleCommits')}
   \${actRow('↺','Reset Commit','soft / mixed / hard reset','gitCommander.resetCommit')}
 </div>
 
-<div class="sec-hdr" onclick="toggleSec(this)"><span class="chevron">▾</span>Advanced & Config</div>
+<div class="sec-hdr" onclick="toggleSec(this)"><span class="chevron">▾</span>Tools & Workflows</div>
 <div class="sec-body">
-  \${actRow('⚙','Configure Repository','set user name/email or open raw config','gitCommander.repoConfig')}
-  \${actRow('⏳','Git Time Machine','view reflog and revert to past states','gitCommander.timeMachine')}
-  \${actRow('⎌','Undo Last Action','undo last commit, reset, or rebase','gitCommander.undoLast')}
+  \${actRow('🚨','Oops! Quick Fixes','macros for common git mistakes','gitCommander.oopsMacros')}
+  \${actRow('☁','Cloud WIP Checkpoint','commit and push work-in-progress','gitCommander.wipBackup')}
+  \${actRow('🧹','Clean Merged Branches','auto-delete safely merged branches','gitCommander.cleanMergedBranches')}
   \${actRow('📦','Git LFS Manager','scan and track large files with LFS','gitCommander.lfsManager')}
   \${actRow('📤','Export to Patch','export uncommitted changes to a .patch file','gitCommander.exportPatch')}
   \${actRow('📥','Apply Patch','apply a .patch file to your working tree','gitCommander.applyPatch')}
+  \${actRow('⚙','Configure Repository','set user name/email or open raw config','gitCommander.repoConfig')}
 </div>\`;
 }
 
@@ -315,8 +353,7 @@ function actRow(icon,label,desc,cmd){
 </div>\`;
 }
 
-function toggleSec(hdr){ hdr.classList.toggle('collapsed'); }
-function toggleGrp(hdr){ hdr.classList.toggle('collapsed'); }
+
 </script>
 </body>
 </html>`;

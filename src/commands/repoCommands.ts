@@ -494,3 +494,149 @@ export async function applyPatchCommand(): Promise<void> {
         }
     }
 }
+
+export async function oopsMacrosCommand(): Promise<void> {
+    const macros = [
+        { label: 'Committed to wrong branch!', description: 'Move the last commit to a different branch' },
+        { label: 'Forgot a file!', description: 'Amend the last commit with new changes' },
+        { label: 'Pushed a bad commit!', description: 'Revert HEAD and push immediately' },
+        { label: 'Messed up everything!', description: 'Hard reset your local branch to match origin' }
+    ];
+
+    const action = await vscode.window.showQuickPick(macros, { placeHolder: 'Select a quick fix macro' });
+    if (!action) return;
+
+    if (action.label.startsWith('Committed to wrong')) {
+        await runGitWithProgress('Undoing commit...', ['reset', '--soft', 'HEAD~1']);
+        await runGitWithProgress('Stashing changes...', ['stash']);
+        
+        const branches = await execGit(['branch', '--format=%(refname:short)']).catch(() => '');
+        const branchList = branches.split('\n').filter(Boolean);
+        const targetBranch = await vscode.window.showQuickPick(branchList, { placeHolder: 'Which branch did you mean to commit to?' });
+        
+        if (targetBranch) {
+            await runGitWithProgress('Switching branch...', ['checkout', targetBranch]);
+            await runGitWithProgress('Restoring changes...', ['stash', 'pop']);
+            vscode.window.showInformationMessage(`Moved changes to ${targetBranch}. You can now commit them!`);
+        } else {
+            await runGitWithProgress('Restoring changes...', ['stash', 'pop']);
+            vscode.window.showInformationMessage('Action cancelled. Changes are unstaged in your current branch.');
+        }
+    } 
+    else if (action.label.startsWith('Forgot a file')) {
+        const res = await vscode.window.showWarningMessage(
+            'This will amend your last commit. Do you want to auto-stage ALL tracked modified files, or just amend what is already staged?',
+            { modal: true },
+            'Stage All Tracked', 'Use Already Staged'
+        );
+        if (res === 'Stage All Tracked') {
+            await runGitWithProgress('Amending...', ['commit', '-a', '--amend', '--no-edit']);
+            vscode.window.showInformationMessage('Amended the last commit with all tracked changes!');
+        } else if (res === 'Use Already Staged') {
+            await runGitWithProgress('Amending...', ['commit', '--amend', '--no-edit']);
+            vscode.window.showInformationMessage('Amended the last commit with staged changes!');
+        }
+    }
+    else if (action.label.startsWith('Pushed a bad')) {
+        const confirmed = await showDestructiveConfirmation('Revert and push?', [
+            'This will create a new commit that reverts the last commit',
+            'And it will immediately push to the remote'
+        ]);
+        if (confirmed) {
+            await runGitWithProgress('Reverting...', ['revert', '--no-edit', 'HEAD']);
+            await runGitWithProgress('Pushing...', ['push']);
+            vscode.window.showInformationMessage('Successfully reverted the last commit and pushed to remote.');
+        }
+    }
+    else if (action.label.startsWith('Messed up everything')) {
+        const currentBranch = await execGit(['branch', '--show-current']).catch(() => '');
+        if (!currentBranch.trim()) {
+            vscode.window.showErrorMessage('Not currently on any branch.');
+            return;
+        }
+        const confirmed = await showDestructiveConfirmation(`Hard reset ${currentBranch.trim()} to origin/${currentBranch.trim()}?`, [
+            'ALL uncommitted changes will be PERMANENTLY LOST',
+            'Any local commits not pushed will be LOST'
+        ]);
+        if (confirmed) {
+            await runGitWithProgress('Fetching origin...', ['fetch', 'origin']);
+            await runGitWithProgress('Hard Resetting...', ['reset', '--hard', `origin/${currentBranch.trim()}`]);
+            vscode.window.showInformationMessage(`Hard reset to origin/${currentBranch.trim()}`);
+        }
+    }
+}
+
+export async function cleanMergedBranchesCommand(): Promise<void> {
+    const currentBranch = await execGit(['branch', '--show-current']).catch(() => '');
+    if (!currentBranch.trim()) {
+        vscode.window.showErrorMessage('Not currently on any branch.');
+        return;
+    }
+
+    const mergedBranchesStr = await execGit(['branch', '--merged']).catch(() => '');
+    const branches = mergedBranchesStr.split('\n')
+        .map(b => b.replace(/^\*?\s+/, '').trim())
+        .filter(b => b && b !== currentBranch.trim() && !['main', 'master', 'dev', 'development'].includes(b));
+
+    if (branches.length === 0) {
+        vscode.window.showInformationMessage('No safely merged branches found to clean up.');
+        return;
+    }
+
+    const confirmed = await showDestructiveConfirmation(`Delete ${branches.length} merged branches?`, [
+        'The following branches have been merged into ' + currentBranch.trim() + ':',
+        ...branches.map(b => `- ${b}`)
+    ]);
+
+    if (confirmed) {
+        let deleted = 0;
+        for (const branch of branches) {
+            try {
+                await runGitWithProgress(`Deleting ${branch}...`, ['branch', '-d', branch]);
+                deleted++;
+            } catch (e) {
+                // Ignore failures for individual branches
+            }
+        }
+        vscode.window.showInformationMessage(`Successfully cleaned up ${deleted} merged branches.`);
+    }
+}
+
+export async function wipBackupCommand(): Promise<void> {
+    const action = await vscode.window.showQuickPick([
+        { label: 'Save Cloud WIP Checkpoint', description: 'Commit all changes as "WIP" and push to remote' },
+        { label: 'Resume Work (Undo WIP Checkpoint)', description: 'Soft reset the last WIP commit' }
+    ], { placeHolder: 'Cloud WIP Checkpoint Manager' });
+
+    if (!action) return;
+
+    if (action.label.startsWith('Save')) {
+        await runGitWithProgress('Staging all changes...', ['add', '.']);
+        
+        const date = new Date().toLocaleString();
+        const wipMessage = `WIP: Checkpoint created on ${date}`;
+        
+        await runGitWithProgress('Creating WIP commit...', ['commit', '-m', wipMessage, '--no-verify']);
+        
+        const currentBranch = await execGit(['branch', '--show-current']).catch(() => '');
+        try {
+            await runGitWithProgress('Pushing WIP checkpoint to cloud...', ['push', '-u', 'origin', currentBranch.trim()]);
+            vscode.window.showInformationMessage('WIP Checkpoint successfully saved to the cloud!');
+        } catch (e) {
+            vscode.window.showWarningMessage('WIP commit created, but failed to push to cloud. Ensure your remote is configured.');
+        }
+    } else {
+        const lastCommitMsg = await execGit(['log', '-1', '--pretty=%B']).catch(() => '');
+        if (!lastCommitMsg.startsWith('WIP:')) {
+            const confirmed = await vscode.window.showWarningMessage(
+                'The last commit does not appear to be a WIP checkpoint. Soft reset anyway?',
+                { modal: true },
+                'Yes, Undo Last Commit'
+            );
+            if (confirmed !== 'Yes, Undo Last Commit') return;
+        }
+        
+        await runGitWithProgress('Undoing WIP commit...', ['reset', '--soft', 'HEAD~1']);
+        vscode.window.showInformationMessage('WIP Checkpoint undone. Your changes are back in the working directory ready for work!');
+    }
+}

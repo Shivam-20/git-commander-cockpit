@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { CockpitWebviewProvider } from './providers/cockpitWebviewProvider';
 import { commitCommand, commitAmendCommand } from './commands/commitCommands';
-import { createBranchCommand, fetchCommand, pullCommand, pushCommand, resetCommitCommand, revertLastCommitCommand, revertMultipleCommitsCommand, revertRecentCommitCommand, stashSaveCommand, switchBranchCommand, timeMachineCommand, undoLastCommand, repoConfigCommand, lfsManagerCommand, exportPatchCommand, applyPatchCommand } from './commands/repoCommands';
+import { createBranchCommand, fetchCommand, pullCommand, pushCommand, resetCommitCommand, revertLastCommitCommand, revertMultipleCommitsCommand, revertRecentCommitCommand, stashSaveCommand, switchBranchCommand, timeMachineCommand, undoLastCommand, repoConfigCommand, lfsManagerCommand, exportPatchCommand, applyPatchCommand, oopsMacrosCommand, cleanMergedBranchesCommand, wipBackupCommand } from './commands/repoCommands';
 import { clearRepoCache } from './git/git';
 import { showError } from './utils/logger';
 
@@ -86,6 +86,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
         vscode.commands.registerCommand('gitCommander.applyPatch', async () => {
             try { await applyPatchCommand(); refresh(); } catch (e) { showError('Failed to apply patch', e); }
+        }),
+        vscode.commands.registerCommand('gitCommander.oopsMacros', async () => {
+            try { await oopsMacrosCommand(); refresh(); } catch (e) { showError('Failed to execute oops macro', e); }
+        }),
+        vscode.commands.registerCommand('gitCommander.cleanMergedBranches', async () => {
+            try { await cleanMergedBranchesCommand(); refresh(); } catch (e) { showError('Failed to clean merged branches', e); }
+        }),
+        vscode.commands.registerCommand('gitCommander.wipBackup', async () => {
+            try { await wipBackupCommand(); refresh(); } catch (e) { showError('Failed to manage WIP backup', e); }
         })
     );
 
