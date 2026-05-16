@@ -3,7 +3,7 @@
   "displayName": "Git Commander Cockpit",
   "description": "Complex Git, One Click Away",
   "icon": "resources/icons/marketplace-icon.png",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "tryToDEv",
   "engines": {
     "vscode": "^1.85.0"
@@ -25,9 +25,7 @@
     "fetch"
   ],
   "activationEvents": [
-    "workspaceContains:.git",
-    "onView:gitCommanderCockpit",
-    "onCommand:gitCommander.refresh"
+    "workspaceContains:.git"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -151,6 +149,31 @@
         "title": "Amend Last Commit",
         "icon": "$(edit)",
         "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.timeMachine",
+        "title": "Git Time Machine (Reflog)",
+        "icon": "$(history)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.undoLast",
+        "title": "Undo Last Action",
+        "icon": "$(discard)",
+        "category": "Git Commander"
+      },
+      {
+        "command": "gitCommander.repoConfig",
+        "title": "Configure Repository",
+        "icon": "$(settings-gear)",
+        "category": "Git Commander"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "gitCommander.advancedMenu",
+        "label": "Advanced & Config",
+        "icon": "$(kebab-vertical)"
       }
     ],
     "viewsContainers": {
@@ -158,7 +181,7 @@
         {
           "id": "gitCommander-explorer",
           "title": "Git Commander",
-          "icon": "resources/icons/marketplace-icon.png"
+          "icon": "resources/icons/commander.svg"
         }
       ]
     },
@@ -168,7 +191,8 @@
           "type": "webview",
           "id": "gitCommanderCockpit",
           "name": "Git Commander",
-          "contextualTitle": "Git Commander"
+          "contextualTitle": "Git Commander",
+          "icon": "resources/icons/commander.svg"
         }
       ]
     },
@@ -224,6 +248,25 @@
           "command": "gitCommander.revertCommit",
           "when": "view == gitCommanderCockpit",
           "group": "navigation@10"
+        },
+        {
+          "submenu": "gitCommander.advancedMenu",
+          "when": "view == gitCommanderCockpit",
+          "group": "navigation@11"
+        }
+      ],
+      "gitCommander.advancedMenu": [
+        {
+          "command": "gitCommander.timeMachine",
+          "group": "1_undo@1"
+        },
+        {
+          "command": "gitCommander.undoLast",
+          "group": "1_undo@2"
+        },
+        {
+          "command": "gitCommander.repoConfig",
+          "group": "2_config@1"
         }
       ],
       "view/item/context": []
