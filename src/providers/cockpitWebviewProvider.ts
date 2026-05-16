@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { execGit, getRepoState, isWorkingTreeClean } from '../git/git';
+import { execGit, getRepoState, isWorkingTreeClean, findGitRepo } from '../git/git';
 import { FileStatus } from '../git/models';
 
 export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
@@ -16,12 +16,13 @@ export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.html = this._buildHtml();
 
         webviewView.webview.onDidReceiveMessage(async (msg) => {
+            const cleanPath = msg.path ? msg.path.replace(/^"(.*)"$/, '$1') : undefined;
             switch (msg.type) {
                 case 'exec':
                     await vscode.commands.executeCommand(msg.cmd);
                     break;
                 case 'stage':
-                    await execGit(['add', '--', msg.path]).catch(() => {});
+                    await execGit(['add', '--', cleanPath!]).catch(() => {});
                     await this.refresh();
                     break;
                 case 'stageAll':
@@ -29,7 +30,7 @@ export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
                     await this.refresh();
                     break;
                 case 'unstage':
-                    await execGit(['restore', '--staged', '--', msg.path]).catch(() => {});
+                    await execGit(['restore', '--staged', '--', cleanPath!]).catch(() => {});
                     await this.refresh();
                     break;
                 case 'unstageAll':
@@ -37,14 +38,14 @@ export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
                     await this.refresh();
                     break;
                 case 'discard':
-                    await this._discard(msg.path, msg.status);
+                    await this._discard(cleanPath!, msg.status);
                     await this.refresh();
                     break;
                 case 'openFile':
-                    await this._openFile(msg.path);
+                    await this._openFile(cleanPath!);
                     break;
                 case 'openDiff':
-                    await this._openDiff(msg.path, msg.status);
+                    await this._openDiff(cleanPath!, msg.status);
                     break;
                 case 'refresh':
                     await this.refresh();
@@ -74,9 +75,9 @@ export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
             if (res !== 'Discard') { return; }
         }
         if (status === 'untracked') {
-            const folders = vscode.workspace.workspaceFolders;
-            if (folders) {
-                const uri = vscode.Uri.joinPath(folders[0].uri, path);
+            const repoRoot = await findGitRepo();
+            if (repoRoot) {
+                const uri = vscode.Uri.file(`${repoRoot}/${path}`);
                 await vscode.workspace.fs.delete(uri).then(() => {}, () => {});
             }
         } else if (status === 'staged') {
@@ -88,29 +89,34 @@ export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _openFile(path: string): Promise<void> {
-        const folders = vscode.workspace.workspaceFolders;
-        if (!folders) { return; }
-        for (const folder of folders) {
-            const uri = vscode.Uri.joinPath(folder.uri, path);
-            try {
-                await vscode.workspace.fs.stat(uri);
-                const doc = await vscode.workspace.openTextDocument(uri);
-                await vscode.window.showTextDocument(doc);
-                return;
-            } catch { /* try next */ }
-        }
+        const repoRoot = await findGitRepo();
+        if (!repoRoot) return;
+        const uri = vscode.Uri.file(`${repoRoot}/${path}`);
+        try {
+            await vscode.workspace.fs.stat(uri);
+            const doc = await vscode.workspace.openTextDocument(uri);
+            await vscode.window.showTextDocument(doc);
+        } catch {}
     }
 
     private async _openDiff(path: string, status: string): Promise<void> {
-        const folders = vscode.workspace.workspaceFolders;
-        if (!folders) { return; }
-        const uri = vscode.Uri.joinPath(folders[0].uri, path);
-        const ref = status === 'staged' ? '' : 'HEAD';
-        const left = uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.fsPath, ref }) });
-        const title = status === 'staged'
-            ? `${path} (Index ↔ Working Tree)`
-            : `${path} (Working Tree)`;
-        await vscode.commands.executeCommand('vscode.diff', left, uri, title);
+        if (status === 'untracked') {
+            return this._openFile(path);
+        }
+        const repoRoot = await findGitRepo();
+        if (!repoRoot) return;
+        const uri = vscode.Uri.file(`${repoRoot}/${path}`);
+        
+        try {
+            await vscode.commands.executeCommand('git.openChange', uri);
+        } catch {
+            const ref = status === 'staged' ? '' : '~';
+            const left = uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.fsPath, ref }) });
+            const title = status === 'staged'
+                ? `${path} (Index ↔ Working Tree)`
+                : `${path} (Working Tree)`;
+            await vscode.commands.executeCommand('vscode.diff', left, uri, title);
+        }
     }
 
     private _buildHtml(): string {
@@ -248,6 +254,13 @@ function render(s){
   \${actRow('⟳','Search & Revert Commit','find and revert a commit','gitCommander.revertCommit')}
   \${actRow('⟳','Revert Multiple Commits','multi-select commits to revert','gitCommander.revertMultipleCommits')}
   \${actRow('↺','Reset Commit','soft / mixed / hard reset','gitCommander.resetCommit')}
+</div>
+
+<div class="sec-hdr" onclick="toggleSec(this)"><span class="chevron">▾</span>Advanced & Config</div>
+<div class="sec-body">
+  \${actRow('⚙','Configure Repository','set user name/email or open raw config','gitCommander.repoConfig')}
+  \${actRow('⏳','Git Time Machine','view reflog and revert to past states','gitCommander.timeMachine')}
+  \${actRow('⎌','Undo Last Action','undo last commit, reset, or rebase','gitCommander.undoLast')}
 </div>\`;
 }
 
