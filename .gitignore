@@ -5,3 +5,25 @@ node_modules/
 .DS_Store
 .superpowers/
 .codex
+
+# IDE / editor
+.vscode/
+.cursor/
+.idea/
+*.swp
+Thumbs.db
+
+# Logs and env
+*.log
+npm-debug.log*
+.env
+.env.*
+
+# Build / test artifacts
+coverage/
+*.tsbuildinfo
+.eslintcache
+
+# Local scratch
+test.txt
+*.patch

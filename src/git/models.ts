@@ -17,17 +17,3 @@ export interface Commit {
     relativeDate: string;
     isPushed: boolean;
 }
-
-export interface Branch {
-    name: string;
-    isCurrent: boolean;
-    isRemote: boolean;
-    upstream?: string;
-}
-
-export interface Stash {
-    index: number;
-    hash: string;
-    message: string;
-}
-

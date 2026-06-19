@@ -29,7 +29,7 @@ function getBucket(file: FileStatus): ChangeBucket {
     if (file.status === 'conflicted') {
         return 'conflicted';
     }
-    if (file.status === 'staged') {
+    if (file.status === 'staged' || file.status === 'renamed') {
         return 'staged';
     }
     if (file.status === 'untracked') {

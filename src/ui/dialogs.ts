@@ -1,14 +1,5 @@
 import * as vscode from 'vscode';
 
-export async function showConfirmation(message: string, detail?: string): Promise<boolean> {
-    const result = await vscode.window.showWarningMessage(
-        message,
-        { modal: true, detail },
-        'Confirm'
-    );
-    return result === 'Confirm';
-}
-
 export async function showDestructiveConfirmation(
     message: string,
     checklistItems: string[]

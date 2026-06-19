@@ -1,5 +1,15 @@
 import { FileStatus, FileStatusType, Commit } from './models';
 
+function makeEntry(
+    path: string,
+    status: FileStatusType,
+    indexStatus: string,
+    worktreeStatus: string,
+    originalPath?: string
+): FileStatus {
+    return { path, status, indexStatus, worktreeStatus, originalPath };
+}
+
 export function parseStatus(output: string): FileStatus[] {
     const lines = output.split('\n').filter(line => line.length > 0);
     const files: FileStatus[] = [];
@@ -9,7 +19,6 @@ export function parseStatus(output: string): FileStatus[] {
             continue;
         }
 
-        // Parse porcelain v1 format: XY <path> or XY <path> -> <origPath>
         const indexStatus = line[0] ?? ' ';
         const worktreeStatus = line[1] ?? ' ';
         const rest = line.slice(3);
@@ -23,35 +32,43 @@ export function parseStatus(output: string): FileStatus[] {
             path = parts[1];
         }
 
-        let status: FileStatusType;
+        if (indexStatus === '?' && worktreeStatus === '?') {
+            files.push(makeEntry(path, 'untracked', indexStatus, worktreeStatus, originalPath));
+            continue;
+        }
+
+        const hasIndexChange = indexStatus !== ' ' && indexStatus !== '?';
+        const hasWorktreeChange = worktreeStatus !== ' ' && worktreeStatus !== '?';
+
         if (
             indexStatus === 'U' ||
             worktreeStatus === 'U' ||
             (indexStatus === 'A' && worktreeStatus === 'A') ||
             (indexStatus === 'D' && worktreeStatus === 'D')
         ) {
-            status = 'conflicted';
-        } else if (indexStatus !== ' ' && indexStatus !== '?') {
-            status = 'staged';
-        } else if (worktreeStatus === 'M') {
-            status = 'modified';
-        } else if (worktreeStatus === 'D') {
-            status = 'deleted';
-        } else if (worktreeStatus === '?') {
-            status = 'untracked';
-        } else if (worktreeStatus === 'A') {
-            status = 'modified';
-        } else {
-            status = 'modified';
+            files.push(makeEntry(path, 'conflicted', indexStatus, worktreeStatus, originalPath));
+            continue;
         }
 
-        files.push({
-            path,
-            status,
-            originalPath,
-            indexStatus,
-            worktreeStatus
-        });
+        if (hasIndexChange) {
+            let stagedStatus: FileStatusType = 'staged';
+            if (indexStatus === 'D') {
+                stagedStatus = 'deleted';
+            } else if (indexStatus === 'R' || indexStatus === 'C') {
+                stagedStatus = 'renamed';
+            }
+            files.push(makeEntry(path, stagedStatus, indexStatus, worktreeStatus, originalPath));
+        }
+
+        if (hasWorktreeChange) {
+            if (worktreeStatus === 'M') {
+                files.push(makeEntry(path, 'modified', indexStatus, worktreeStatus, originalPath));
+            } else if (worktreeStatus === 'D') {
+                files.push(makeEntry(path, 'deleted', indexStatus, worktreeStatus, originalPath));
+            } else if (!hasIndexChange) {
+                files.push(makeEntry(path, 'modified', indexStatus, worktreeStatus, originalPath));
+            }
+        }
     }
 
     return files;
@@ -85,7 +102,7 @@ export function parseLog(output: string): Commit[] {
             author,
             date,
             relativeDate,
-            isPushed: false // Will be determined separately
+            isPushed: false
         });
     }
 

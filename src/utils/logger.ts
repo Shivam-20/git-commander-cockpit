@@ -2,10 +2,6 @@ import * as vscode from 'vscode';
 
 const outputChannel = vscode.window.createOutputChannel('Git Commander');
 
-export function log(message: string): void {
-    outputChannel.appendLine(`[INFO] ${message}`);
-}
-
 export function logError(message: string, error?: unknown): void {
     outputChannel.appendLine(`[ERROR] ${message}`);
     if (error instanceof Error) {

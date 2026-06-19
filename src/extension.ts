@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
-import { CockpitWebviewProvider } from './providers/cockpitWebviewProvider';
+import { CockpitWebviewProvider, pickFileAndRun } from './providers/cockpitWebviewProvider';
 import { commitCommand, commitAmendCommand } from './commands/commitCommands';
 import { createBranchCommand, fetchCommand, pullCommand, pushCommand, resetCommitCommand, revertLastCommitCommand, revertMultipleCommitsCommand, revertRecentCommitCommand, stashSaveCommand, switchBranchCommand, timeMachineCommand, undoLastCommand, repoConfigCommand, lfsManagerCommand, exportPatchCommand, applyPatchCommand, oopsMacrosCommand, cleanMergedBranchesCommand, wipBackupCommand } from './commands/repoCommands';
-import { clearRepoCache } from './git/git';
+import { clearRepoCache, execGit, findGitRepo } from './git/git';
 import { showError } from './utils/logger';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    const cockpitProvider = new CockpitWebviewProvider();
+    const cockpitProvider = new CockpitWebviewProvider(context.extensionUri);
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
@@ -23,16 +23,60 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         cockpitProvider.refresh();
     };
 
+    const config = () => vscode.workspace.getConfiguration('gitCommander');
+
     const disposable = vscode.Disposable.from(
         vscode.commands.registerCommand('gitCommander.refresh', hardRefresh),
-        // File-level commands — still usable from command palette / keybindings
-        vscode.commands.registerCommand('gitCommander.stage', () => {}),
-        vscode.commands.registerCommand('gitCommander.stageAll', async () => { await vscode.commands.executeCommand('gitCommander.refresh'); }),
-        vscode.commands.registerCommand('gitCommander.unstage', () => {}),
-        vscode.commands.registerCommand('gitCommander.unstageAll', async () => { await vscode.commands.executeCommand('gitCommander.refresh'); }),
-        vscode.commands.registerCommand('gitCommander.discard', () => {}),
-        vscode.commands.registerCommand('gitCommander.openFile', () => {}),
-        vscode.commands.registerCommand('gitCommander.openDiff', () => {}),
+        vscode.commands.registerCommand('gitCommander.stage', () =>
+            pickFileAndRun(async (p) => { await execGit(['add', '--', p]); refresh(); }, 'Select file to stage')
+        ),
+        vscode.commands.registerCommand('gitCommander.stageAll', async () => {
+            await execGit(['add', '-A', '--', '.']);
+            refresh();
+        }),
+        vscode.commands.registerCommand('gitCommander.unstage', () =>
+            pickFileAndRun(async (p) => { await execGit(['restore', '--staged', '--', p]); refresh(); }, 'Select file to unstage')
+        ),
+        vscode.commands.registerCommand('gitCommander.unstageAll', async () => {
+            await execGit(['restore', '--staged', '--', '.']);
+            refresh();
+        }),
+        vscode.commands.registerCommand('gitCommander.discard', () =>
+            pickFileAndRun(async (p, status) => {
+                if (status === 'untracked') {
+                    const root = await findGitRepo();
+                    if (root) {
+                        await vscode.workspace.fs.delete(vscode.Uri.file(`${root}/${p}`), { recursive: true });
+                    }
+                } else {
+                    await execGit(['restore', '--', p]);
+                }
+                refresh();
+            }, 'Select file to discard changes')
+        ),
+        vscode.commands.registerCommand('gitCommander.openFile', () =>
+            pickFileAndRun(async (p) => {
+                const root = await findGitRepo();
+                if (root) {
+                    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(`${root}/${p}`));
+                    await vscode.window.showTextDocument(doc);
+                }
+            }, 'Select file to open')
+        ),
+        vscode.commands.registerCommand('gitCommander.openDiff', () =>
+            pickFileAndRun(async (p) => {
+                const root = await findGitRepo();
+                if (root) {
+                    const uri = vscode.Uri.file(`${root}/${p}`);
+                    try {
+                        await vscode.commands.executeCommand('git.openChange', uri);
+                    } catch {
+                        const left = uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.fsPath, ref: 'HEAD' }) });
+                        await vscode.commands.executeCommand('vscode.diff', left, uri, `${p} (HEAD ↔ Working Tree)`);
+                    }
+                }
+            }, 'Select file to diff')
+        ),
         vscode.commands.registerCommand('gitCommander.switchBranch', async () => {
             try { await switchBranchCommand(); refresh(); } catch (e) { showError('Failed to switch branch', e); }
         }),
@@ -100,21 +144,43 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     context.subscriptions.push(disposable);
 
-    // Auto-refresh on .git/index changes
     const watcher = vscode.workspace.createFileSystemWatcher('**/.git/index');
     watcher.onDidChange(hardRefresh);
     watcher.onDidCreate(hardRefresh);
     watcher.onDidDelete(hardRefresh);
     context.subscriptions.push(watcher);
 
-    // Clear repo cache on workspace changes
     context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(hardRefresh));
 
-    // Polling refresh every 3 seconds
     let interval: NodeJS.Timeout | undefined;
-    const startPolling = () => { if (!interval) { interval = setInterval(refresh, 3000); } };
-    const stopPolling  = () => { if (interval) { clearInterval(interval); interval = undefined; } };
-    startPolling();
+    const startPolling = () => {
+        if (!interval && config().get<boolean>('autoRefresh', true)) {
+            interval = setInterval(refresh, 3000);
+        }
+    };
+    const stopPolling = () => {
+        if (interval) {
+            clearInterval(interval);
+            interval = undefined;
+        }
+    };
+    const syncPolling = () => {
+        stopPolling();
+        startPolling();
+    };
+
+    syncPolling();
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (e.affectsConfiguration('gitCommander.autoRefresh')) {
+                syncPolling();
+            }
+            if (e.affectsConfiguration('gitCommander.showActionSection') ||
+                e.affectsConfiguration('gitCommander.compactActions')) {
+                refresh();
+            }
+        })
+    );
     context.subscriptions.push({ dispose: stopPolling });
 
     refresh();

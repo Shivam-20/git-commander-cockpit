@@ -1,0 +1,90 @@
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--vscode-font-family,'Segoe UI',system-ui,sans-serif);font-size:var(--vscode-font-size,13px);color:var(--vscode-foreground);background:var(--vscode-sideBar-background);overflow-x:hidden}
+#root{overflow-y:auto;max-height:calc(100vh - 32px)}
+/* Toolbar */
+.toolbar{height:28px;display:flex;align-items:center;gap:2px;padding:2px 4px;border-bottom:1px solid var(--vscode-sideBarSectionHeader-border,transparent);background:var(--vscode-sideBar-background);position:sticky;top:0;z-index:10}
+.tb-btn{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:var(--vscode-foreground);border-radius:3px;cursor:pointer}
+.tb-btn:hover{background:var(--vscode-toolbar-hoverBackground,rgba(128,128,128,.2))}
+.tb-btn:disabled{opacity:.4;cursor:default}
+/* Sections */
+.sec-hdr{height:24px;display:flex;align-items:center;gap:5px;padding:0 6px;cursor:pointer;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--vscode-sideBarSectionHeader-foreground,var(--vscode-foreground));background:var(--vscode-sideBarSectionHeader-background,transparent)}
+.sec-hdr:hover{background:var(--vscode-list-hoverBackground)}
+.chevron{font-size:12px;transition:transform .15s;display:inline-block;opacity:.7}
+.sec-hdr.collapsed .chevron{transform:rotate(-90deg)}
+.sec-body{display:block}
+.sec-hdr.collapsed+.sec-body{display:none}
+/* Overview */
+.ov-row{height:22px;display:flex;align-items:center;padding:0 6px 0 22px;gap:6px;font-size:12px}
+.ov-row.clickable{cursor:pointer}
+.ov-row.clickable:hover{background:var(--vscode-list-hoverBackground)}
+.ov-icon{width:15px;text-align:center;opacity:.8;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.ov-key{color:var(--vscode-descriptionForeground);min-width:72px;flex-shrink:0}
+.ov-val{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;user-select:text}
+.badge{display:inline-flex;align-items:center;padding:0 5px;height:14px;border-radius:10px;font-size:10px;font-weight:600;background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);margin-left:3px}
+.badge.behind{background:var(--vscode-editorError-foreground,#e45454);color:#fff}
+.badge.clickable{cursor:pointer}
+.badge.clickable:hover{opacity:.85}
+/* Commit box */
+.commit-box{padding:6px 8px 8px 22px;display:flex;flex-direction:column;gap:4px}
+.commit-box input{width:100%;padding:4px 6px;font-size:12px;font-family:inherit;color:var(--vscode-input-foreground);background:var(--vscode-input-background);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;outline:none}
+.commit-box input:focus{border-color:var(--vscode-focusBorder)}
+.commit-box input:disabled{opacity:.6}
+.commit-row{display:flex;gap:4px;align-items:center}
+.commit-btn{padding:3px 10px;font-size:11px;cursor:pointer;border:none;border-radius:2px;background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
+.commit-btn:hover{background:var(--vscode-button-hoverBackground)}
+.commit-btn:disabled{opacity:.5;cursor:default}
+.commit-hint{font-size:11px;color:var(--vscode-descriptionForeground)}
+/* Filter */
+.filter-row{padding:4px 8px 6px 22px;display:flex;gap:4px;align-items:center}
+.filter-row input{flex:1;padding:3px 6px;font-size:12px;font-family:inherit;color:var(--vscode-input-foreground);background:var(--vscode-input-background);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;outline:none}
+.filter-row input:focus{border-color:var(--vscode-focusBorder)}
+.filter-clear{width:20px;height:20px;border:none;background:transparent;color:var(--vscode-descriptionForeground);cursor:pointer;border-radius:2px;display:flex;align-items:center;justify-content:center}
+.filter-clear:hover{background:var(--vscode-toolbar-hoverBackground,rgba(128,128,128,.2))}
+/* Group header */
+.grp-hdr{height:24px;display:flex;align-items:center;padding:0 4px 0 14px;cursor:pointer;gap:5px;font-size:12px;position:relative}
+.grp-hdr:hover{background:var(--vscode-list-hoverBackground)}
+.grp-hdr:hover .grp-acts,.grp-hdr:focus-within .grp-acts{opacity:1}
+.g-chev{font-size:9px;color:var(--vscode-descriptionForeground);transition:transform .15s}
+.grp-hdr.collapsed .g-chev{transform:rotate(-90deg)}
+.grp-icon{width:14px;text-align:center;font-size:12px;display:flex;align-items:center;justify-content:center}
+.grp-lbl{flex:1;font-weight:600}
+.grp-cnt{font-size:11px;color:var(--vscode-descriptionForeground);padding-right:2px}
+.grp-acts{opacity:0;display:flex;gap:1px;transition:opacity .12s}
+@media (hover:none){.grp-acts,.fa-wrap{opacity:1!important}}
+.ga-btn{width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:2px;cursor:pointer;font-size:13px;color:var(--vscode-descriptionForeground);border:none;background:transparent;transition:background .1s,color .1s}
+.ga-btn:hover{background:var(--vscode-toolbar-hoverBackground,rgba(128,128,128,.2));color:var(--vscode-foreground)}
+.grp-files{display:block}.grp-hdr.collapsed+.grp-files{display:none}
+/* File item */
+.file-row{height:22px;display:flex;align-items:center;padding:0 4px 0 28px;gap:5px;cursor:pointer;position:relative}
+.file-row:hover,.file-row:focus-within{background:var(--vscode-list-hoverBackground)}
+.file-row:hover .fa-wrap,.file-row:focus-within .fa-wrap{opacity:1}
+.f-ico{width:13px;text-align:center;font-size:11px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.f-name-wrap{flex:1;overflow:hidden;display:flex;align-items:baseline;gap:2px;min-width:0}
+.f-dir{font-size:11px;color:var(--vscode-descriptionForeground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:1;min-width:0}
+.f-name{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;user-select:text}
+.f-rename{font-size:10px;color:var(--vscode-descriptionForeground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:1}
+.f-tag{font-size:11px;color:var(--vscode-descriptionForeground);flex-shrink:0}
+.fa-wrap{opacity:0;display:flex;gap:1px;transition:opacity .12s;flex-shrink:0}
+.fa-btn{width:17px;height:17px;display:flex;align-items:center;justify-content:center;border-radius:2px;cursor:pointer;font-size:12px;color:var(--vscode-descriptionForeground);border:none;background:transparent;transition:background .1s,color .1s}
+.fa-btn:hover{background:var(--vscode-toolbar-hoverBackground,rgba(128,128,128,.2));color:var(--vscode-foreground)}
+/* Action items */
+.act-row{height:22px;display:flex;align-items:center;padding:0 6px 0 22px;gap:7px;cursor:pointer;font-size:12px}
+.act-row:hover{background:var(--vscode-list-hoverBackground)}
+.act-icon{width:14px;text-align:center;opacity:.8;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.act-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act-desc{font-size:11px;color:var(--vscode-descriptionForeground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px}
+.act-sub-hdr{height:20px;display:flex;align-items:center;padding:0 6px 0 28px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--vscode-descriptionForeground)}
+/* Status colors */
+.c-mod{color:var(--vscode-gitDecoration-modifiedResourceForeground,#e2c08d)}
+.c-add{color:var(--vscode-gitDecoration-addedResourceForeground,#73c991)}
+.c-del{color:var(--vscode-gitDecoration-deletedResourceForeground,#f14c4c)}
+.c-new{color:var(--vscode-gitDecoration-untrackedResourceForeground,#73c991)}
+.c-conflict{color:var(--vscode-gitDecoration-conflictingResourceForeground,#e4676b)}
+/* Loading / empty */
+.empty{padding:12px 16px;font-size:12px;color:var(--vscode-descriptionForeground)}
+.loading{padding:8px 16px;font-size:12px;color:var(--vscode-descriptionForeground);display:flex;align-items:center;gap:6px}
+/* Toast */
+.toast{position:fixed;bottom:8px;left:8px;right:8px;padding:6px 10px;border-radius:4px;font-size:12px;z-index:100;transition:opacity .2s}
+.toast.hidden{opacity:0;pointer-events:none}
+.toast.error{background:var(--vscode-inputValidation-errorBackground);border:1px solid var(--vscode-inputValidation-errorBorder);color:var(--vscode-inputValidation-errorForeground)}
+.toast.info{background:var(--vscode-inputValidation-infoBackground);border:1px solid var(--vscode-inputValidation-infoBorder);color:var(--vscode-inputValidation-infoForeground)}

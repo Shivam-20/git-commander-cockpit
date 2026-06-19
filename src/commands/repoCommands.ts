@@ -1,9 +1,18 @@
 import * as vscode from 'vscode';
 import { buildCommitQuickPick, getRevertOrder } from '../git/commitHistory';
 import { execGit, getRecentCommits, getRepoState, isWorkingTreeClean, runGitWithProgress } from '../git/git';
+import { parseMergedBranches } from '../git/parser';
 import { showBranchPicker, showCommitMultiPicker, showCommitPicker } from '../ui/quickPicks';
 import { showDestructiveConfirmation } from '../ui/dialogs';
 import { Commit } from '../git/models';
+
+async function confirmHardResetIfEnabled(title: string, items: string[]): Promise<boolean> {
+    const config = vscode.workspace.getConfiguration('gitCommander');
+    if (!config.get<boolean>('confirmHardReset', true)) {
+        return true;
+    }
+    return showDestructiveConfirmation(title, items);
+}
 
 export async function switchBranchCommand(): Promise<void> {
     const branches = (await execGit(['branch', '--format=%(refname:short)']))
@@ -53,6 +62,18 @@ export async function pullCommand(): Promise<void> {
 
 export async function pushCommand(): Promise<void> {
     const state = await getRepoState();
+    if (state.overview.branch === 'Detached HEAD') {
+        vscode.window.showWarningMessage(
+            'Cannot push from detached HEAD. Checkout or create a branch first.',
+            'Switch Branch'
+        ).then((choice) => {
+            if (choice === 'Switch Branch') {
+                vscode.commands.executeCommand('gitCommander.switchBranch');
+            }
+        });
+        return;
+    }
+
     if (!state.overview.hasUpstream) {
         const result = await vscode.window.showInformationMessage(
             'No upstream branch is configured. Push and set upstream?',
@@ -170,6 +191,13 @@ async function pickResetMode(): Promise<'soft' | 'mixed' | 'hard' | undefined> {
 }
 
 async function confirmResetPreconditions(mode: 'soft' | 'mixed' | 'hard', target: Commit): Promise<boolean> {
+    if (mode === 'hard') {
+        const config = vscode.workspace.getConfiguration('gitCommander');
+        if (!config.get<boolean>('confirmHardReset', true)) {
+            return true;
+        }
+    }
+
     const items = [`I understand reset --${mode} moves HEAD to ${target.shortHash}`];
 
     if (mode === 'soft') {
@@ -280,7 +308,7 @@ export async function timeMachineCommand(): Promise<void> {
     });
 
     if (selected) {
-        const confirmed = await showDestructiveConfirmation(`Reset hard to ${selected.hash}?`, [
+        const confirmed = await confirmHardResetIfEnabled(`Reset hard to ${selected.hash}?`, [
             `This will move HEAD to ${selected.hash}`,
             'All current uncommitted changes will be lost'
         ]);
@@ -292,7 +320,7 @@ export async function timeMachineCommand(): Promise<void> {
 }
 
 export async function undoLastCommand(): Promise<void> {
-    const confirmed = await showDestructiveConfirmation('Undo last Git action?', [
+    const confirmed = await confirmHardResetIfEnabled('Undo last Git action?', [
         'This will run `git reset --hard HEAD@{1}`',
         'All current uncommitted changes will be lost',
         'This undoes the last commit, reset, rebase, or merge'
@@ -554,13 +582,20 @@ export async function oopsMacrosCommand(): Promise<void> {
             vscode.window.showErrorMessage('Not currently on any branch.');
             return;
         }
-        const confirmed = await showDestructiveConfirmation(`Hard reset ${currentBranch.trim()} to origin/${currentBranch.trim()}?`, [
+        const confirmed = await confirmHardResetIfEnabled(`Hard reset ${currentBranch.trim()} to origin/${currentBranch.trim()}?`, [
             'ALL uncommitted changes will be PERMANENTLY LOST',
             'Any local commits not pushed will be LOST'
         ]);
         if (confirmed) {
             await runGitWithProgress('Fetching origin...', ['fetch', 'origin']);
-            await runGitWithProgress('Hard Resetting...', ['reset', '--hard', `origin/${currentBranch.trim()}`]);
+            const remoteRef = `origin/${currentBranch.trim()}`;
+            try {
+                await execGit(['rev-parse', '--verify', remoteRef]);
+            } catch {
+                vscode.window.showErrorMessage(`Remote branch ${remoteRef} does not exist.`);
+                return;
+            }
+            await runGitWithProgress('Hard Resetting...', ['reset', '--hard', remoteRef]);
             vscode.window.showInformationMessage(`Hard reset to origin/${currentBranch.trim()}`);
         }
     }
@@ -574,9 +609,7 @@ export async function cleanMergedBranchesCommand(): Promise<void> {
     }
 
     const mergedBranchesStr = await execGit(['branch', '--merged']).catch(() => '');
-    const branches = mergedBranchesStr.split('\n')
-        .map(b => b.replace(/^\*?\s+/, '').trim())
-        .filter(b => b && b !== currentBranch.trim() && !['main', 'master', 'dev', 'development'].includes(b));
+    const branches = parseMergedBranches(mergedBranchesStr, currentBranch.trim());
 
     if (branches.length === 0) {
         vscode.window.showInformationMessage('No safely merged branches found to clean up.');
