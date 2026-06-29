@@ -5,6 +5,12 @@ import { parseMergedBranches } from '../git/parser';
 import { showBranchPicker, showCommitMultiPicker, showCommitPicker } from '../ui/quickPicks';
 import { showDestructiveConfirmation } from '../ui/dialogs';
 import { Commit } from '../git/models';
+import {
+    enhancedRevertLastCommit,
+    enhancedRevertSelectedCommit,
+    enhancedResetCommit,
+    enhancedUndoLastAction
+} from './enhancedRevertReset';
 
 async function confirmHardResetIfEnabled(title: string, items: string[]): Promise<boolean> {
     const config = vscode.workspace.getConfiguration('gitCommander');
@@ -213,37 +219,13 @@ async function confirmResetPreconditions(mode: 'soft' | 'mixed' | 'hard', target
 }
 
 export async function revertLastCommitCommand(): Promise<void> {
-    const commits = await getRecentCommits(1);
-    const latest = commits[0];
-    if (!latest) {
-        vscode.window.showWarningMessage('No local commits are available to revert.');
-        return;
-    }
-
-    const confirmed = await confirmRevertPreconditions(`Revert latest commit ${latest.shortHash}?`);
-    if (!confirmed) {
-        return;
-    }
-
-    await runGitWithProgress('Reverting latest commit...', ['revert', '--no-edit', latest.hash]);
-    vscode.window.showInformationMessage(`Reverted ${latest.shortHash}.`);
+    // Use the enhanced version with better UX
+    await enhancedRevertLastCommit();
 }
 
 export async function revertRecentCommitCommand(): Promise<void> {
-    const selection = await pickCommitToRevert('Select commit to revert');
-    if (!selection) {
-        // User cancelled or no commits — warning already shown by pickRecentCommits if needed
-        return;
-    }
-
-    const target = selection.commits.find((commit) => commit.hash === selection.selectedHash);
-    const confirmed = await confirmRevertPreconditions(`Revert commit ${target?.shortHash ?? selection.selectedHash.slice(0, 7)}?`);
-    if (!confirmed) {
-        return;
-    }
-
-    await runGitWithProgress('Reverting selected commit...', ['revert', '--no-edit', selection.selectedHash]);
-    vscode.window.showInformationMessage(`Reverted ${target?.shortHash ?? selection.selectedHash.slice(0, 7)}.`);
+    // Use the enhanced version with better UX
+    await enhancedRevertSelectedCommit();
 }
 
 export async function revertMultipleCommitsCommand(): Promise<void> {
@@ -264,30 +246,8 @@ export async function revertMultipleCommitsCommand(): Promise<void> {
 }
 
 export async function resetCommitCommand(): Promise<void> {
-    const selection = await pickCommitToRevert('Select commit to reset to');
-    if (!selection) {
-        // User cancelled or no commits — warning already shown if needed
-        return;
-    }
-
-    const target = selection.commits.find((commit) => commit.hash === selection.selectedHash);
-    if (!target) {
-        vscode.window.showWarningMessage('The selected commit could not be resolved.');
-        return;
-    }
-
-    const mode = await pickResetMode();
-    if (!mode) {
-        return;
-    }
-
-    const confirmed = await confirmResetPreconditions(mode, target);
-    if (!confirmed) {
-        return;
-    }
-
-    await runGitWithProgress(`Resetting branch with --${mode}...`, ['reset', `--${mode}`, target.hash]);
-    vscode.window.showInformationMessage(`Reset current branch to ${target.shortHash} with --${mode}.`);
+    // Use the enhanced version with detailed preview and better UX
+    await enhancedResetCommit();
 }
 
 export async function timeMachineCommand(): Promise<void> {
@@ -320,15 +280,8 @@ export async function timeMachineCommand(): Promise<void> {
 }
 
 export async function undoLastCommand(): Promise<void> {
-    const confirmed = await confirmHardResetIfEnabled('Undo last Git action?', [
-        'This will run `git reset --hard HEAD@{1}`',
-        'All current uncommitted changes will be lost',
-        'This undoes the last commit, reset, rebase, or merge'
-    ]);
-    if (confirmed) {
-        await runGitWithProgress('Undoing last action...', ['reset', '--hard', 'HEAD@{1}']);
-        vscode.window.showInformationMessage('Successfully undid last Git action.');
-    }
+    // Use the enhanced version with better preview and safety
+    await enhancedUndoLastAction();
 }
 
 export async function repoConfigCommand(): Promise<void> {
