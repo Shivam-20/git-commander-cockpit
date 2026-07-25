@@ -376,9 +376,10 @@ export async function applyPatchCommand(): Promise<void> {
     try {
         await runGitWithProgress('Applying Patch...', ['apply', '--whitespace=nowarn', path]);
         vscode.window.showInformationMessage('Patch applied successfully.');
-    } catch (e: any) {
-        let errorMsg = e.stderr ? e.stderr : (e.message || 'Unknown error');
-        // If it's too long, truncate it so the dialog isn't massive
+    } catch (e: unknown) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        const gitErr = e as { stderr?: string };
+        let errorMsg = gitErr.stderr || err.message || 'Unknown error';
         if (errorMsg.length > 300) {
             errorMsg = errorMsg.substring(0, 300) + '...';
         }
@@ -393,7 +394,7 @@ export async function applyPatchCommand(): Promise<void> {
             try {
                 await runGitWithProgress('Force Applying Patch...', ['apply', '--reject', '--whitespace=nowarn', path]);
                 vscode.window.showInformationMessage('Patch applied with conflicts. Check for .rej files.');
-            } catch (err: any) {
+            } catch {
                 vscode.window.showWarningMessage('Patch partially applied with conflicts. Please review the generated .rej files in your workspace.');
             }
         }

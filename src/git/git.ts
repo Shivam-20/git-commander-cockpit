@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
-import * as nodePath from 'path';
 import { spawn } from 'child_process';
 import { promisify } from 'util';
 import { exec as execCb } from 'child_process';
 import { parseAheadBehind, parseCurrentBranch, parseLog, parseStatus, parseUpstreamRef } from './parser';
 import { RepoState } from './repoState';
 import { Commit } from './models';
+import { safeRepoPath as _safeRepoPath } from '../utils/pathUtils';
+
+export const safeRepoPath = _safeRepoPath;
 
 const execAsync = promisify(execCb);
 
@@ -51,14 +53,6 @@ export async function findGitRepo(): Promise<string | undefined> {
 
 export function clearRepoCache(): void {
     cachedRepoRoot = undefined;
-}
-
-export function safeRepoPath(repoRoot: string, relativePath: string): string | null {
-    const resolved = nodePath.resolve(repoRoot, relativePath);
-    if (!resolved.startsWith(repoRoot + nodePath.sep) && resolved !== repoRoot) {
-        return null;
-    }
-    return resolved;
 }
 
 export async function execGit(args: string[], cwd?: string): Promise<string> {

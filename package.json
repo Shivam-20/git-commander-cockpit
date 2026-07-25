@@ -3,7 +3,7 @@
   "displayName": "Git Commander Cockpit",
   "description": "Complex Git, One Click Away",
   "icon": "resources/icons/marketplace-icon.png",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "tryToDEv",
   "engines": {
     "vscode": "^1.85.0"
