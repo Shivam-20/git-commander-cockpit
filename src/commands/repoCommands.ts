@@ -1,16 +1,10 @@
 import * as vscode from 'vscode';
-import { buildCommitQuickPick, getRevertOrder } from '../git/commitHistory';
+import { getRevertOrder } from '../git/commitHistory';
 import { execGit, getRecentCommits, getRepoState, isWorkingTreeClean, runGitWithProgress } from '../git/git';
 import { parseMergedBranches } from '../git/parser';
-import { showBranchPicker, showCommitMultiPicker, showCommitPicker } from '../ui/quickPicks';
+import { showBranchPicker, showCommitMultiPicker } from '../ui/quickPicks';
 import { showDestructiveConfirmation } from '../ui/dialogs';
 import { Commit } from '../git/models';
-import {
-    enhancedRevertLastCommit,
-    enhancedRevertSelectedCommit,
-    enhancedResetCommit,
-    enhancedUndoLastAction
-} from './enhancedRevertReset';
 
 async function confirmHardResetIfEnabled(title: string, items: string[]): Promise<boolean> {
     const config = vscode.workspace.getConfiguration('gitCommander');
@@ -91,8 +85,10 @@ export async function pushCommand(): Promise<void> {
         }
 
         const branchName = state.overview.branch;
-        await runGitWithProgress('Pushing and setting upstream...', ['push', '--set-upstream', 'origin', branchName]);
-        vscode.window.showInformationMessage(`Pushed ${branchName} and set upstream.`);
+        const remote = await execGit(['config', '--get', `branch.${branchName}.remote`]).catch(() => '');
+        const pushRemote = remote.trim() || 'origin';
+        await runGitWithProgress('Pushing and setting upstream...', ['push', '--set-upstream', pushRemote, branchName]);
+        vscode.window.showInformationMessage(`Pushed ${branchName} to ${pushRemote} and set upstream.`);
         return;
     }
 
@@ -149,23 +145,6 @@ async function pickRecentCommits(): Promise<Commit[] | undefined> {
     return recentCommits;
 }
 
-async function pickCommitToRevert(placeHolder: string): Promise<{ commits: Commit[]; selectedHash: string } | undefined> {
-    const recentCommits = await pickRecentCommits();
-    if (!recentCommits) {
-        return undefined;
-    }
-
-    const selectedHash = await showCommitPicker(
-        buildCommitQuickPick(recentCommits),
-        `${placeHolder} - type message, author, or hash to search`
-    );
-    if (!selectedHash) {
-        return undefined;
-    }
-
-    return { commits: recentCommits, selectedHash };
-}
-
 async function pickCommitsToRevert(placeHolder: string): Promise<{ commits: Commit[]; selectedHashes: string[] } | undefined> {
     const recentCommits = await pickRecentCommits();
     if (!recentCommits) {
@@ -183,51 +162,6 @@ async function pickCommitsToRevert(placeHolder: string): Promise<{ commits: Comm
     return { commits: recentCommits, selectedHashes };
 }
 
-async function pickResetMode(): Promise<'soft' | 'mixed' | 'hard' | undefined> {
-    const result = await vscode.window.showQuickPick(
-        [
-            { label: 'Soft', description: 'move HEAD and keep changes staged', value: 'soft' as const },
-            { label: 'Mixed', description: 'move HEAD and keep changes unstaged', value: 'mixed' as const },
-            { label: 'Hard', description: 'move HEAD and discard later changes', value: 'hard' as const }
-        ],
-        { placeHolder: 'Select reset mode' }
-    );
-
-    return result?.value;
-}
-
-async function confirmResetPreconditions(mode: 'soft' | 'mixed' | 'hard', target: Commit): Promise<boolean> {
-    if (mode === 'hard') {
-        const config = vscode.workspace.getConfiguration('gitCommander');
-        if (!config.get<boolean>('confirmHardReset', true)) {
-            return true;
-        }
-    }
-
-    const items = [`I understand reset --${mode} moves HEAD to ${target.shortHash}`];
-
-    if (mode === 'soft') {
-        items.push('I understand later changes will stay staged');
-    } else if (mode === 'mixed') {
-        items.push('I understand later changes will stay unstaged');
-    } else {
-        items.push('I understand reset --hard discards later working tree changes');
-        items.push('I understand this is destructive');
-    }
-
-    return showDestructiveConfirmation(`Reset current branch to ${target.shortHash} with --${mode}?`, items);
-}
-
-export async function revertLastCommitCommand(): Promise<void> {
-    // Use the enhanced version with better UX
-    await enhancedRevertLastCommit();
-}
-
-export async function revertRecentCommitCommand(): Promise<void> {
-    // Use the enhanced version with better UX
-    await enhancedRevertSelectedCommit();
-}
-
 export async function revertMultipleCommitsCommand(): Promise<void> {
     const selection = await pickCommitsToRevert('Select commits to revert');
     if (!selection) {
@@ -243,11 +177,6 @@ export async function revertMultipleCommitsCommand(): Promise<void> {
 
     await runGitWithProgress('Reverting selected commits...', ['revert', '--no-edit', ...orderedHashes]);
     vscode.window.showInformationMessage(`Reverted ${orderedHashes.length} commits.`);
-}
-
-export async function resetCommitCommand(): Promise<void> {
-    // Use the enhanced version with detailed preview and better UX
-    await enhancedResetCommit();
 }
 
 export async function timeMachineCommand(): Promise<void> {
@@ -277,11 +206,6 @@ export async function timeMachineCommand(): Promise<void> {
             vscode.window.showInformationMessage(`Time Machine reset to ${selected.hash}`);
         }
     }
-}
-
-export async function undoLastCommand(): Promise<void> {
-    // Use the enhanced version with better preview and safety
-    await enhancedUndoLastAction();
 }
 
 export async function repoConfigCommand(): Promise<void> {
@@ -476,81 +400,88 @@ export async function applyPatchCommand(): Promise<void> {
     }
 }
 
+async function macroCommittedToWrongBranch(): Promise<void> {
+    await runGitWithProgress('Undoing commit...', ['reset', '--soft', 'HEAD~1']);
+    await runGitWithProgress('Stashing changes...', ['stash']);
+
+    const branches = await execGit(['branch', '--format=%(refname:short)']).catch(() => '');
+    const branchList = branches.split('\n').filter(Boolean);
+    const targetBranch = await vscode.window.showQuickPick(branchList, { placeHolder: 'Which branch did you mean to commit to?' });
+
+    if (targetBranch) {
+        await runGitWithProgress('Switching branch...', ['checkout', targetBranch]);
+        await runGitWithProgress('Restoring changes...', ['stash', 'pop']);
+        vscode.window.showInformationMessage(`Moved changes to ${targetBranch}. You can now commit them!`);
+    } else {
+        await runGitWithProgress('Restoring changes...', ['stash', 'pop']);
+        vscode.window.showInformationMessage('Action cancelled. Changes are unstaged in your current branch.');
+    }
+}
+
+async function macroForgotFile(): Promise<void> {
+    const res = await vscode.window.showWarningMessage(
+        'This will amend your last commit. Do you want to auto-stage ALL tracked modified files, or just amend what is already staged?',
+        { modal: true },
+        'Stage All Tracked', 'Use Already Staged'
+    );
+    if (res === 'Stage All Tracked') {
+        await runGitWithProgress('Amending...', ['commit', '-a', '--amend', '--no-edit']);
+        vscode.window.showInformationMessage('Amended the last commit with all tracked changes!');
+    } else if (res === 'Use Already Staged') {
+        await runGitWithProgress('Amending...', ['commit', '--amend', '--no-edit']);
+        vscode.window.showInformationMessage('Amended the last commit with staged changes!');
+    }
+}
+
+async function macroPushedBadCommit(): Promise<void> {
+    const confirmed = await showDestructiveConfirmation('Revert and push?', [
+        'This will create a new commit that reverts the last commit',
+        'And it will immediately push to the remote'
+    ]);
+    if (confirmed) {
+        await runGitWithProgress('Reverting...', ['revert', '--no-edit', 'HEAD']);
+        await runGitWithProgress('Pushing...', ['push']);
+        vscode.window.showInformationMessage('Successfully reverted the last commit and pushed to remote.');
+    }
+}
+
+async function macroMessedUpEverything(): Promise<void> {
+    const currentBranch = await execGit(['branch', '--show-current']).catch(() => '');
+    if (!currentBranch.trim()) {
+        vscode.window.showErrorMessage('Not currently on any branch.');
+        return;
+    }
+    const remote = await execGit(['config', '--get', `branch.${currentBranch.trim()}.remote`]).catch(() => '');
+    const pushRemote = remote.trim() || 'origin';
+    const remoteRef = `${pushRemote}/${currentBranch.trim()}`;
+    const confirmed = await confirmHardResetIfEnabled(`Hard reset ${currentBranch.trim()} to ${remoteRef}?`, [
+        'ALL uncommitted changes will be PERMANENTLY LOST',
+        'Any local commits not pushed will be LOST'
+    ]);
+    if (confirmed) {
+        await runGitWithProgress(`Fetching ${pushRemote}...`, ['fetch', pushRemote]);
+        try {
+            await execGit(['rev-parse', '--verify', remoteRef]);
+        } catch {
+            vscode.window.showErrorMessage(`Remote branch ${remoteRef} does not exist.`);
+            return;
+        }
+        await runGitWithProgress('Hard Resetting...', ['reset', '--hard', remoteRef]);
+        vscode.window.showInformationMessage(`Hard reset to ${remoteRef}`);
+    }
+}
+
 export async function oopsMacrosCommand(): Promise<void> {
     const macros = [
-        { label: 'Committed to wrong branch!', description: 'Move the last commit to a different branch' },
-        { label: 'Forgot a file!', description: 'Amend the last commit with new changes' },
-        { label: 'Pushed a bad commit!', description: 'Revert HEAD and push immediately' },
-        { label: 'Messed up everything!', description: 'Hard reset your local branch to match origin' }
+        { label: 'Committed to wrong branch!', description: 'Move the last commit to a different branch', fn: macroCommittedToWrongBranch },
+        { label: 'Forgot a file!', description: 'Amend the last commit with new changes', fn: macroForgotFile },
+        { label: 'Pushed a bad commit!', description: 'Revert HEAD and push immediately', fn: macroPushedBadCommit },
+        { label: 'Messed up everything!', description: 'Hard reset your local branch to match remote', fn: macroMessedUpEverything }
     ];
 
     const action = await vscode.window.showQuickPick(macros, { placeHolder: 'Select a quick fix macro' });
-    if (!action) return;
-
-    if (action.label.startsWith('Committed to wrong')) {
-        await runGitWithProgress('Undoing commit...', ['reset', '--soft', 'HEAD~1']);
-        await runGitWithProgress('Stashing changes...', ['stash']);
-        
-        const branches = await execGit(['branch', '--format=%(refname:short)']).catch(() => '');
-        const branchList = branches.split('\n').filter(Boolean);
-        const targetBranch = await vscode.window.showQuickPick(branchList, { placeHolder: 'Which branch did you mean to commit to?' });
-        
-        if (targetBranch) {
-            await runGitWithProgress('Switching branch...', ['checkout', targetBranch]);
-            await runGitWithProgress('Restoring changes...', ['stash', 'pop']);
-            vscode.window.showInformationMessage(`Moved changes to ${targetBranch}. You can now commit them!`);
-        } else {
-            await runGitWithProgress('Restoring changes...', ['stash', 'pop']);
-            vscode.window.showInformationMessage('Action cancelled. Changes are unstaged in your current branch.');
-        }
-    } 
-    else if (action.label.startsWith('Forgot a file')) {
-        const res = await vscode.window.showWarningMessage(
-            'This will amend your last commit. Do you want to auto-stage ALL tracked modified files, or just amend what is already staged?',
-            { modal: true },
-            'Stage All Tracked', 'Use Already Staged'
-        );
-        if (res === 'Stage All Tracked') {
-            await runGitWithProgress('Amending...', ['commit', '-a', '--amend', '--no-edit']);
-            vscode.window.showInformationMessage('Amended the last commit with all tracked changes!');
-        } else if (res === 'Use Already Staged') {
-            await runGitWithProgress('Amending...', ['commit', '--amend', '--no-edit']);
-            vscode.window.showInformationMessage('Amended the last commit with staged changes!');
-        }
-    }
-    else if (action.label.startsWith('Pushed a bad')) {
-        const confirmed = await showDestructiveConfirmation('Revert and push?', [
-            'This will create a new commit that reverts the last commit',
-            'And it will immediately push to the remote'
-        ]);
-        if (confirmed) {
-            await runGitWithProgress('Reverting...', ['revert', '--no-edit', 'HEAD']);
-            await runGitWithProgress('Pushing...', ['push']);
-            vscode.window.showInformationMessage('Successfully reverted the last commit and pushed to remote.');
-        }
-    }
-    else if (action.label.startsWith('Messed up everything')) {
-        const currentBranch = await execGit(['branch', '--show-current']).catch(() => '');
-        if (!currentBranch.trim()) {
-            vscode.window.showErrorMessage('Not currently on any branch.');
-            return;
-        }
-        const confirmed = await confirmHardResetIfEnabled(`Hard reset ${currentBranch.trim()} to origin/${currentBranch.trim()}?`, [
-            'ALL uncommitted changes will be PERMANENTLY LOST',
-            'Any local commits not pushed will be LOST'
-        ]);
-        if (confirmed) {
-            await runGitWithProgress('Fetching origin...', ['fetch', 'origin']);
-            const remoteRef = `origin/${currentBranch.trim()}`;
-            try {
-                await execGit(['rev-parse', '--verify', remoteRef]);
-            } catch {
-                vscode.window.showErrorMessage(`Remote branch ${remoteRef} does not exist.`);
-                return;
-            }
-            await runGitWithProgress('Hard Resetting...', ['reset', '--hard', remoteRef]);
-            vscode.window.showInformationMessage(`Hard reset to origin/${currentBranch.trim()}`);
-        }
+    if (action) {
+        await action.fn();
     }
 }
 
@@ -605,8 +536,10 @@ export async function wipBackupCommand(): Promise<void> {
         await runGitWithProgress('Creating WIP commit...', ['commit', '-m', wipMessage, '--no-verify']);
         
         const currentBranch = await execGit(['branch', '--show-current']).catch(() => '');
+        const remote = await execGit(['config', '--get', `branch.${currentBranch.trim()}.remote`]).catch(() => '');
+        const pushRemote = remote.trim() || 'origin';
         try {
-            await runGitWithProgress('Pushing WIP checkpoint to cloud...', ['push', '-u', 'origin', currentBranch.trim()]);
+            await runGitWithProgress('Pushing WIP checkpoint to cloud...', ['push', '-u', pushRemote, currentBranch.trim()]);
             vscode.window.showInformationMessage('WIP Checkpoint successfully saved to the cloud!');
         } catch (e) {
             vscode.window.showWarningMessage('WIP commit created, but failed to push to cloud. Ensure your remote is configured.');

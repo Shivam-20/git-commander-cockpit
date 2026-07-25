@@ -1,15 +1,49 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execGit, getRepoState, findGitRepo, runGitWithProgress } from '../git/git';
+import { execGit, getRepoState, findGitRepo, runGitWithProgress, safeRepoPath } from '../git/git';
 import { showError } from '../utils/logger';
+
+const ALLOWED_COMMANDS = new Set([
+    'gitCommander.refresh', 'gitCommander.stage', 'gitCommander.stageAll',
+    'gitCommander.unstage', 'gitCommander.unstageAll', 'gitCommander.discard',
+    'gitCommander.openFile', 'gitCommander.openDiff', 'gitCommander.switchBranch',
+    'gitCommander.createBranch', 'gitCommander.fetch', 'gitCommander.pull',
+    'gitCommander.push', 'gitCommander.stashSave', 'gitCommander.revertLastCommit',
+    'gitCommander.revertCommit', 'gitCommander.revertMultipleCommits',
+    'gitCommander.resetCommit', 'gitCommander.commit', 'gitCommander.commitAmend',
+    'gitCommander.timeMachine', 'gitCommander.undoLast', 'gitCommander.repoConfig',
+    'gitCommander.lfsManager', 'gitCommander.exportPatch', 'gitCommander.applyPatch',
+    'gitCommander.oopsMacros', 'gitCommander.cleanMergedBranches', 'gitCommander.wipBackup',
+    'git.openChange', 'vscode.diff'
+]);
+
+type WebviewMessage =
+    | { type: 'exec'; cmd: string }
+    | { type: 'execMenu'; menu: string }
+    | { type: 'stage'; path: string }
+    | { type: 'stageAll'; scope?: string }
+    | { type: 'stageAllUntracked'; paths?: string[] }
+    | { type: 'unstage'; path: string }
+    | { type: 'unstageAll' }
+    | { type: 'discard'; path: string; status: string }
+    | { type: 'openFile'; path: string }
+    | { type: 'openDiff'; path: string; status: string }
+    | { type: 'commit'; message: string }
+    | { type: 'refresh' };
 
 export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'gitCommanderCockpit';
     private _view?: vscode.WebviewView;
     private _lastStateJson = '';
+    private _visibilityChangeEmitter = new vscode.EventEmitter<boolean>();
+    public readonly onDidChangeVisibility = this._visibilityChangeEmitter.event;
 
     constructor(private readonly _extensionUri: vscode.Uri) {}
+
+    get isVisible(): boolean {
+        return this._view?.visible ?? false;
+    }
 
     resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -24,16 +58,24 @@ export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
             await this._handleMessage(msg);
         });
 
+        webviewView.onDidChangeVisibility(() => {
+            this._visibilityChangeEmitter.fire(webviewView.visible);
+        });
+
         this.refresh();
     }
 
-    private async _handleMessage(msg: { type: string; path?: string; status?: string; scope?: string; paths?: string[]; cmd?: string; message?: string; menu?: string }): Promise<void> {
-        const cleanPath = msg.path ? msg.path.replace(/^"(.*)"$/, '$1') : undefined;
+    private async _handleMessage(msg: WebviewMessage): Promise<void> {
+        const cleanPath = 'path' in msg && msg.path ? msg.path.replace(/^"(.*)"$/, '$1') : undefined;
 
         try {
             switch (msg.type) {
                 case 'exec':
                     if (msg.cmd) {
+                        if (!ALLOWED_COMMANDS.has(msg.cmd)) {
+                            showError(`Rejected unknown command: ${msg.cmd}`);
+                            return;
+                        }
                         await vscode.commands.executeCommand(msg.cmd);
                     }
                     break;
@@ -48,6 +90,10 @@ export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
                             { placeHolder: 'Sync with remote' }
                         );
                         if (pick?.command) {
+                            if (!ALLOWED_COMMANDS.has(pick.command)) {
+                                showError(`Rejected unknown command: ${pick.command}`);
+                                return;
+                            }
                             await vscode.commands.executeCommand(pick.command);
                         }
                     }
@@ -149,8 +195,9 @@ export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
         if (status === 'untracked') {
             const repoRoot = await findGitRepo();
             if (repoRoot) {
-                const uri = vscode.Uri.file(`${repoRoot}/${filePath}`);
-                await vscode.workspace.fs.delete(uri, { recursive: true });
+                const fullPath = safeRepoPath(repoRoot, filePath);
+                if (!fullPath) { return; }
+                await vscode.workspace.fs.delete(vscode.Uri.file(fullPath), { recursive: true });
             }
         } else if (status === 'staged') {
             await execGit(['restore', '--staged', '--', filePath]);
@@ -163,7 +210,9 @@ export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
     private async _openFile(filePath: string): Promise<void> {
         const repoRoot = await findGitRepo();
         if (!repoRoot) { return; }
-        const uri = vscode.Uri.file(`${repoRoot}/${filePath}`);
+        const fullPath = safeRepoPath(repoRoot, filePath);
+        if (!fullPath) { return; }
+        const uri = vscode.Uri.file(fullPath);
         const doc = await vscode.workspace.openTextDocument(uri);
         await vscode.window.showTextDocument(doc);
     }
@@ -174,7 +223,9 @@ export class CockpitWebviewProvider implements vscode.WebviewViewProvider {
         }
         const repoRoot = await findGitRepo();
         if (!repoRoot) { return; }
-        const uri = vscode.Uri.file(`${repoRoot}/${filePath}`);
+        const fullPath = safeRepoPath(repoRoot, filePath);
+        if (!fullPath) { return; }
+        const uri = vscode.Uri.file(fullPath);
 
         try {
             await vscode.commands.executeCommand('git.openChange', uri);

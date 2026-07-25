@@ -1,9 +1,36 @@
 import * as vscode from 'vscode';
 import { CockpitWebviewProvider, pickFileAndRun } from './providers/cockpitWebviewProvider';
 import { commitCommand, commitAmendCommand } from './commands/commitCommands';
-import { createBranchCommand, fetchCommand, pullCommand, pushCommand, resetCommitCommand, revertLastCommitCommand, revertMultipleCommitsCommand, revertRecentCommitCommand, stashSaveCommand, switchBranchCommand, timeMachineCommand, undoLastCommand, repoConfigCommand, lfsManagerCommand, exportPatchCommand, applyPatchCommand, oopsMacrosCommand, cleanMergedBranchesCommand, wipBackupCommand } from './commands/repoCommands';
-import { clearRepoCache, execGit, findGitRepo } from './git/git';
+import {
+    createBranchCommand, fetchCommand, pullCommand, pushCommand,
+    revertMultipleCommitsCommand, stashSaveCommand, switchBranchCommand,
+    timeMachineCommand, repoConfigCommand, lfsManagerCommand,
+    exportPatchCommand, applyPatchCommand, oopsMacrosCommand,
+    cleanMergedBranchesCommand, wipBackupCommand
+} from './commands/repoCommands';
+import { enhancedRevertLastCommit, enhancedRevertSelectedCommit } from './commands/revert';
+import { enhancedResetCommit } from './commands/reset';
+import { enhancedUndoLastAction } from './commands/undo';
+import { clearRepoCache, execGit, findGitRepo, safeRepoPath } from './git/git';
 import { showError } from './utils/logger';
+
+type CommandFn = () => Promise<void>;
+
+function registerWithRefresh(
+    id: string,
+    fn: CommandFn,
+    refresh: () => void,
+    errorMsg: string
+): vscode.Disposable {
+    return vscode.commands.registerCommand(id, async () => {
+        try {
+            await fn();
+            refresh();
+        } catch (e) {
+            showError(errorMsg, e);
+        }
+    });
+}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const cockpitProvider = new CockpitWebviewProvider(context.extensionUri);
@@ -23,10 +50,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         cockpitProvider.refresh();
     };
 
-    const config = () => vscode.workspace.getConfiguration('gitCommander');
+    const commands: Array<[string, CommandFn, string]> = [
+        ['gitCommander.switchBranch', switchBranchCommand, 'Failed to switch branch'],
+        ['gitCommander.createBranch', createBranchCommand, 'Failed to create branch'],
+        ['gitCommander.fetch', fetchCommand, 'Failed to fetch'],
+        ['gitCommander.pull', pullCommand, 'Failed to pull'],
+        ['gitCommander.push', pushCommand, 'Failed to push'],
+        ['gitCommander.stashSave', stashSaveCommand, 'Failed to stash changes'],
+        ['gitCommander.revertLastCommit', enhancedRevertLastCommit, 'Failed to revert latest commit'],
+        ['gitCommander.revertCommit', enhancedRevertSelectedCommit, 'Failed to revert selected commit'],
+        ['gitCommander.revertMultipleCommits', revertMultipleCommitsCommand, 'Failed to revert selected commits'],
+        ['gitCommander.resetCommit', enhancedResetCommit, 'Failed to reset selected commit'],
+        ['gitCommander.commit', commitCommand, 'Failed to commit'],
+        ['gitCommander.commitAmend', commitAmendCommand, 'Failed to amend commit'],
+        ['gitCommander.timeMachine', timeMachineCommand, 'Failed to run time machine'],
+        ['gitCommander.undoLast', enhancedUndoLastAction, 'Failed to undo last action'],
+        ['gitCommander.repoConfig', repoConfigCommand, 'Failed to configure repo'],
+        ['gitCommander.lfsManager', lfsManagerCommand, 'Failed to manage LFS'],
+        ['gitCommander.applyPatch', applyPatchCommand, 'Failed to apply patch'],
+        ['gitCommander.oopsMacros', oopsMacrosCommand, 'Failed to execute oops macro'],
+        ['gitCommander.cleanMergedBranches', cleanMergedBranchesCommand, 'Failed to clean merged branches'],
+        ['gitCommander.wipBackup', wipBackupCommand, 'Failed to manage WIP backup'],
+    ];
 
     const disposable = vscode.Disposable.from(
         vscode.commands.registerCommand('gitCommander.refresh', hardRefresh),
+
         vscode.commands.registerCommand('gitCommander.stage', () =>
             pickFileAndRun(async (p) => { await execGit(['add', '--', p]); refresh(); }, 'Select file to stage')
         ),
@@ -46,7 +95,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 if (status === 'untracked') {
                     const root = await findGitRepo();
                     if (root) {
-                        await vscode.workspace.fs.delete(vscode.Uri.file(`${root}/${p}`), { recursive: true });
+                        const filePath = safeRepoPath(root, p);
+                        if (!filePath) { return; }
+                        await vscode.workspace.fs.delete(vscode.Uri.file(filePath), { recursive: true });
                     }
                 } else {
                     await execGit(['restore', '--', p]);
@@ -58,7 +109,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             pickFileAndRun(async (p) => {
                 const root = await findGitRepo();
                 if (root) {
-                    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(`${root}/${p}`));
+                    const filePath = safeRepoPath(root, p);
+                    if (!filePath) { return; }
+                    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
                     await vscode.window.showTextDocument(doc);
                 }
             }, 'Select file to open')
@@ -67,7 +120,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             pickFileAndRun(async (p) => {
                 const root = await findGitRepo();
                 if (root) {
-                    const uri = vscode.Uri.file(`${root}/${p}`);
+                    const filePath = safeRepoPath(root, p);
+                    if (!filePath) { return; }
+                    const uri = vscode.Uri.file(filePath);
                     try {
                         await vscode.commands.executeCommand('git.openChange', uri);
                     } catch {
@@ -77,69 +132,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 }
             }, 'Select file to diff')
         ),
-        vscode.commands.registerCommand('gitCommander.switchBranch', async () => {
-            try { await switchBranchCommand(); refresh(); } catch (e) { showError('Failed to switch branch', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.createBranch', async () => {
-            try { await createBranchCommand(); refresh(); } catch (e) { showError('Failed to create branch', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.fetch', async () => {
-            try { await fetchCommand(); refresh(); } catch (e) { showError('Failed to fetch', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.pull', async () => {
-            try { await pullCommand(); refresh(); } catch (e) { showError('Failed to pull', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.push', async () => {
-            try { await pushCommand(); refresh(); } catch (e) { showError('Failed to push', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.stashSave', async () => {
-            try { await stashSaveCommand(); refresh(); } catch (e) { showError('Failed to stash changes', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.revertLastCommit', async () => {
-            try { await revertLastCommitCommand(); refresh(); } catch (e) { showError('Failed to revert latest commit', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.revertCommit', async () => {
-            try { await revertRecentCommitCommand(); refresh(); } catch (e) { showError('Failed to revert selected commit', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.revertMultipleCommits', async () => {
-            try { await revertMultipleCommitsCommand(); refresh(); } catch (e) { showError('Failed to revert selected commits', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.resetCommit', async () => {
-            try { await resetCommitCommand(); refresh(); } catch (e) { showError('Failed to reset selected commit', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.commit', async () => {
-            try { await commitCommand(); refresh(); } catch (e) { showError('Failed to commit', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.commitAmend', async () => {
-            try { await commitAmendCommand(); refresh(); } catch (e) { showError('Failed to amend commit', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.timeMachine', async () => {
-            try { await timeMachineCommand(); refresh(); } catch (e) { showError('Failed to run time machine', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.undoLast', async () => {
-            try { await undoLastCommand(); refresh(); } catch (e) { showError('Failed to undo last action', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.repoConfig', async () => {
-            try { await repoConfigCommand(); refresh(); } catch (e) { showError('Failed to configure repo', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.lfsManager', async () => {
-            try { await lfsManagerCommand(); refresh(); } catch (e) { showError('Failed to manage LFS', e); }
-        }),
         vscode.commands.registerCommand('gitCommander.exportPatch', async () => {
             try { await exportPatchCommand(); } catch (e) { showError('Failed to export patch', e); }
         }),
-        vscode.commands.registerCommand('gitCommander.applyPatch', async () => {
-            try { await applyPatchCommand(); refresh(); } catch (e) { showError('Failed to apply patch', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.oopsMacros', async () => {
-            try { await oopsMacrosCommand(); refresh(); } catch (e) { showError('Failed to execute oops macro', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.cleanMergedBranches', async () => {
-            try { await cleanMergedBranchesCommand(); refresh(); } catch (e) { showError('Failed to clean merged branches', e); }
-        }),
-        vscode.commands.registerCommand('gitCommander.wipBackup', async () => {
-            try { await wipBackupCommand(); refresh(); } catch (e) { showError('Failed to manage WIP backup', e); }
-        })
+
+        ...commands.map(([id, fn, error]) => registerWithRefresh(id, fn, refresh, error))
     );
 
     context.subscriptions.push(disposable);
@@ -152,9 +149,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(hardRefresh));
 
+    const config = () => vscode.workspace.getConfiguration('gitCommander');
+
     let interval: NodeJS.Timeout | undefined;
     const startPolling = () => {
-        if (!interval && config().get<boolean>('autoRefresh', true)) {
+        if (!interval && config().get<boolean>('autoRefresh', true) && cockpitProvider.isVisible) {
             interval = setInterval(refresh, 3000);
         }
     };
@@ -168,6 +167,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         stopPolling();
         startPolling();
     };
+
+    context.subscriptions.push(
+        cockpitProvider.onDidChangeVisibility((visible) => {
+            if (visible) {
+                startPolling();
+            } else {
+                stopPolling();
+            }
+        })
+    );
 
     syncPolling();
     context.subscriptions.push(

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as nodePath from 'path';
 import { spawn } from 'child_process';
 import { promisify } from 'util';
 import { exec as execCb } from 'child_process';
@@ -52,6 +53,14 @@ export function clearRepoCache(): void {
     cachedRepoRoot = undefined;
 }
 
+export function safeRepoPath(repoRoot: string, relativePath: string): string | null {
+    const resolved = nodePath.resolve(repoRoot, relativePath);
+    if (!resolved.startsWith(repoRoot + nodePath.sep) && resolved !== repoRoot) {
+        return null;
+    }
+    return resolved;
+}
+
 export async function execGit(args: string[], cwd?: string): Promise<string> {
     const repoRoot = cwd ?? await findGitRepo();
     if (!repoRoot) {
@@ -100,12 +109,14 @@ export async function getRepoState(): Promise<RepoState> {
     const branchOutput = await execGit(['branch', '--show-current']);
     const branch = parseCurrentBranch(branchOutput);
 
-    let upstream: string | undefined;
-    try {
-        upstream = parseUpstreamRef(await execGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']));
-    } catch {
-        upstream = undefined;
-    }
+    // Run independent calls in parallel
+    const [upstreamResult, statusOutput, stashOutput] = await Promise.all([
+        execGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']).catch(() => ''),
+        execGit(['status', '--porcelain']),
+        execGit(['stash', 'list']).catch(() => '')
+    ]);
+
+    const upstream = parseUpstreamRef(upstreamResult);
 
     let ahead = 0;
     let behind = 0;
@@ -119,9 +130,6 @@ export async function getRepoState(): Promise<RepoState> {
             behind = 0;
         }
     }
-
-    const statusOutput = await execGit(['status', '--porcelain']);
-    const stashOutput = await execGit(['stash', 'list']).catch(() => '');
 
     return {
         overview: {

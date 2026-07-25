@@ -18,13 +18,7 @@ function showToast(message, level) {
   toastTimer = setTimeout(() => el.classList.add('hidden'), 4000);
 }
 
-function toggleSec(hdr, id) {
-  hdr.classList.toggle('collapsed');
-  state.col[id] = hdr.classList.contains('collapsed');
-  saveState();
-}
-
-function toggleGrp(hdr, id) {
+function toggleSection(hdr, id) {
   hdr.classList.toggle('collapsed');
   state.col[id] = hdr.classList.contains('collapsed');
   saveState();
@@ -121,13 +115,13 @@ root.addEventListener('click', (e) => {
 
   const grpHdr = target.closest('.grp-hdr[data-grp-id]');
   if (grpHdr) {
-    toggleGrp(grpHdr, grpHdr.dataset.grpId);
+    toggleSection(grpHdr, grpHdr.dataset.grpId);
     return;
   }
 
   const secHdr = target.closest('.sec-hdr[data-sec-id]');
   if (secHdr) {
-    toggleSec(secHdr, secHdr.dataset.secId);
+    toggleSection(secHdr, secHdr.dataset.secId);
     return;
   }
 
